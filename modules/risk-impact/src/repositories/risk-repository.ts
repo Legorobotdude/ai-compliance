@@ -36,10 +36,15 @@ export class RiskRepository {
   }
 
   async recordScenarioResult(payload: { tenantId: TenantID; regulationCode: string; deltas: RegulationScenarioDelta[] }) {
+    const payloadJson = JSON.stringify({
+      recordedAtIso: new Date().toISOString(),
+      regulationCode: payload.regulationCode,
+      deltas: payload.deltas
+    });
     await this.db.query({
       text: `insert into impact_scenarios (tenant_id, regulation_code, payload)
              values ($1, $2, $3::jsonb)`,
-      values: [payload.tenantId, payload.regulationCode, payload.deltas]
+      values: [payload.tenantId, payload.regulationCode, payloadJson]
     });
   }
 }

@@ -2,16 +2,20 @@
 
 import { useMemo, useState } from "react";
 
-import { auditLogEntries } from "@/lib/data/mock-dashboard";
+import type { AuditLogEntry } from "@/lib/types/dashboard";
 import { SectionCard } from "@/components/ui/section-card";
 
 const outcomes = ["ALL", "SUCCESS", "RETRY", "FAILED"] as const;
 
-export function AuditLogFeed() {
+type AuditLogFeedProps = {
+  entries: AuditLogEntry[];
+};
+
+export function AuditLogFeed({ entries }: AuditLogFeedProps) {
   const [filter, setFilter] = useState<(typeof outcomes)[number]>("ALL");
-  const entries = useMemo(
-    () => auditLogEntries.filter((entry) => (filter === "ALL" ? true : entry.outcome === filter)),
-    [filter]
+  const filteredEntries = useMemo(
+    () => entries.filter((entry) => (filter === "ALL" ? true : entry.outcome === filter)),
+    [filter, entries]
   );
 
   return (
@@ -33,7 +37,7 @@ export function AuditLogFeed() {
       }
     >
       <div className="space-y-3">
-        {entries.map((entry) => (
+        {filteredEntries.map((entry) => (
           <div key={entry.id} className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
             <div className="flex items-center justify-between text-sm">
               <p className="font-semibold text-white">{entry.model}</p>
@@ -49,12 +53,13 @@ export function AuditLogFeed() {
                 {entry.outcome}
               </span>
             </div>
-            <p className="text-xs text-slate-400">
-              Prompt {entry.promptHash} · {entry.latencyMs} ms · Tenant {entry.tenant}
-            </p>
+            <p className="text-xs text-slate-400">Prompt {entry.promptHash} · {entry.latencyMs} ms</p>
             <p className="text-xs text-slate-500">{new Date(entry.createdAt).toLocaleString()}</p>
           </div>
         ))}
+        {!filteredEntries.length ? (
+          <p className="text-sm text-slate-500">No audit entries match the selected filter.</p>
+        ) : null}
       </div>
     </SectionCard>
   );

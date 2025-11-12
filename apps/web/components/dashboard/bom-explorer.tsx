@@ -11,9 +11,16 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
-import { bomRows, type BomRow, type BomStatus } from "@/lib/data/mock-dashboard";
+import type { DashboardBomRow } from "@/lib/types/dashboard";
+import type { DashboardSnapshot } from "@/lib/types/dashboard";
 import { statusClass } from "@/lib/status";
 import { SectionCard } from "@/components/ui/section-card";
+
+type BomStatus = DashboardSnapshot["bom"]["items"][number]["status"];
+
+type BomExplorerProps = {
+  rows: DashboardBomRow[];
+};
 
 const statusOptions: Array<{ label: string; value: BomStatus | "ALL" }> = [
   { label: "All", value: "ALL" },
@@ -23,29 +30,45 @@ const statusOptions: Array<{ label: string; value: BomStatus | "ALL" }> = [
   { label: "Over limit", value: "OVER_LIMIT" }
 ];
 
-const columns: ColumnDef<BomRow>[] = [
+const columns: ColumnDef<DashboardBomRow>[] = [
   {
     header: "Part",
     accessorKey: "partNumber",
     cell: (info) => (
       <div>
         <p className="font-medium text-white">{info.getValue<string>()}</p>
-        <p className="text-xs text-slate-400">{info.row.original.assembly}</p>
+        <p className="text-xs text-slate-400">
+          {info.row.original.assemblyName ?? info.row.original.assemblyId}
+        </p>
       </div>
     )
   },
   {
     header: "Supplier",
-    accessorKey: "supplier"
+    accessorFn: (row) => row.supplierName ?? "Unassigned",
+    cell: (info) => <span>{info.getValue<string>()}</span>
   },
   {
-    header: "Substance",
-    accessorKey: "substance"
-  },
-  {
-    header: "Concentration (ppm)",
-    accessorKey: "ppm",
-    cell: (info) => <span>{info.getValue<number>().toLocaleString()}</span>
+    header: "Findings",
+    accessorKey: "findings",
+    cell: (info) => {
+      const findings = info.getValue<DashboardBomRow["findings"]>();
+      if (!findings.length) {
+        return <span className="text-xs text-slate-500">No findings</span>;
+      }
+      return (
+        <div className="flex flex-wrap gap-2 text-xs text-slate-200">
+          {findings.slice(0, 2).map((finding) => (
+            <span key={`${info.row.id}-${finding.substance}`} className="rounded-full bg-slate-800 px-2 py-1">
+              {finding.substance}: {finding.ppm != null ? finding.ppm.toLocaleString() : "n/a"} ppm
+            </span>
+          ))}
+          {findings.length > 2 ? (
+            <span className="rounded-full bg-slate-800 px-2 py-1 text-slate-400">+{findings.length - 2} more</span>
+          ) : null}
+        </div>
+      );
+    }
   },
   {
     header: "Status",
@@ -55,28 +78,32 @@ const columns: ColumnDef<BomRow>[] = [
   {
     header: "Valid until",
     accessorKey: "validUntil",
-    cell: (info) => new Date(info.getValue<string>()).toLocaleDateString()
+    cell: (info) =>
+      info.getValue<string | undefined>()
+        ? new Date(info.getValue<string>()).toLocaleDateString()
+        : "—"
   }
 ];
 
-export function BomExplorer() {
+export function BomExplorer({ rows }: BomExplorerProps) {
   const [statusFilter, setStatusFilter] = useState<BomStatus | "ALL">("ALL");
   const [search, setSearch] = useState("");
   const [sorting, setSorting] = useState<SortingState>([{ id: "partNumber", desc: false }]);
   const parentRef = useRef<HTMLDivElement | null>(null);
 
   const filteredData = useMemo(() => {
-    return bomRows.filter((row) => {
+    return rows.filter((row) => {
       const matchesStatus = statusFilter === "ALL" || row.status === statusFilter;
       const term = search.toLowerCase();
       const matchesSearch =
         !term ||
         row.partNumber.toLowerCase().includes(term) ||
-        row.supplier.toLowerCase().includes(term) ||
-        row.substance.toLowerCase().includes(term);
+        (row.supplierName ?? "").toLowerCase().includes(term) ||
+        (row.assemblyName ?? row.assemblyId).toLowerCase().includes(term) ||
+        row.findings.some((finding) => finding.substance.toLowerCase().includes(term));
       return matchesStatus && matchesSearch;
     });
-  }, [statusFilter, search]);
+  }, [rows, statusFilter, search]);
 
   const table = useReactTable({
     data: filteredData,
@@ -121,6 +148,12 @@ export function BomExplorer() {
       }
     >
       <div ref={parentRef} className="h-96 overflow-auto rounded-2xl border border-slate-800">
+        {filteredData.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-slate-500">
+            No BOM entries match the current filters.
+          </div>
+        ) : (
+          <>
         <table className="min-w-full text-sm">
           <thead className="sticky top-0 bg-slate-950/90 text-left text-xs uppercase tracking-wide text-slate-400 backdrop-blur">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -157,6 +190,8 @@ export function BomExplorer() {
             );
           })}
         </div>
+          </>
+        )}
       </div>
     </SectionCard>
   );

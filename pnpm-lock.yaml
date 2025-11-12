@@ -75,6 +75,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@certivo/dashboard':
+        specifier: workspace:*
+        version: link:../../modules/dashboard
       '@tanstack/react-table':
         specifier: ^8.21.2
         version: 8.21.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -164,6 +167,21 @@ importers:
         specifier: workspace:*
         version: link:../../libs/db
 
+  modules/dashboard:
+    dependencies:
+      '@certivo/compliance':
+        specifier: workspace:*
+        version: link:../compliance
+      '@certivo/lib-db':
+        specifier: workspace:*
+        version: link:../../libs/db
+      '@certivo/risk-impact':
+        specifier: workspace:*
+        version: link:../risk-impact
+      '@certivo/supplier':
+        specifier: workspace:*
+        version: link:../supplier
+
   modules/file-document:
     dependencies:
       '@certivo/lib-db':
@@ -175,6 +193,9 @@ importers:
       '@certivo/compliance':
         specifier: workspace:*
         version: link:../compliance
+      '@certivo/dashboard':
+        specifier: workspace:*
+        version: link:../dashboard
       '@certivo/file-document':
         specifier: workspace:*
         version: link:../file-document

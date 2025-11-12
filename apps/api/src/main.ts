@@ -211,6 +211,14 @@ function buildApp(options: BuildAppOptions): Express {
     })
   );
 
+  app.get(
+    '/dashboard/snapshot',
+    route('GET /dashboard/snapshot', async (req, res) => {
+      const httpReq = buildHttpRequest<unknown, Record<string, string>, { bomId?: string }>(req);
+      await controller.getDashboardSnapshot(httpReq, createHttpResponse(res));
+    })
+  );
+
   app.use(createErrorHandler(logger));
 
   return app;

@@ -1,3 +1,3 @@
-export * from './client';
-export * from './schema';
-export * from './tenant-context';
+export * from './client.js';
+export * from './schema.js';
+export * from './tenant-context.js';

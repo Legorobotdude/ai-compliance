@@ -7,8 +7,11 @@ import { IngestionOpsCenter } from "@/components/dashboard/ingestion-ops-center"
 import { SlaMonitor } from "@/components/dashboard/sla-monitor";
 import { RoleGate } from "@/components/rbac/role-gate";
 import { RoleSwitcher } from "@/components/rbac/role-switcher";
+import { fetchDashboardSnapshot } from "@/lib/api/dashboard";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const snapshot = await fetchDashboardSnapshot();
+
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-10">
       <header className="flex flex-col gap-4 rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900/90 via-slate-900/60 to-slate-900/30 p-8 text-white shadow-card lg:flex-row lg:items-end lg:justify-between">
@@ -16,22 +19,27 @@ export default function DashboardPage() {
           <p className="text-sm uppercase tracking-widest text-brand-300">Architecture §6-aligned dashboard</p>
           <h1 className="mt-2 text-3xl font-semibold">Certivo Compliance Command Center</h1>
           <p className="mt-2 text-slate-300">
-            Unified BOM explorer, supplier scorecards, risk heatmaps, and CORA observability in one Next.js frontend.
+            Tracking BOM {snapshot.bom.externalId} ({snapshot.bom.productName}) with supplier scorecards, risk
+            heatmaps, and CORA observability.
           </p>
         </div>
         <RoleSwitcher />
       </header>
 
-      <BomExplorer />
-      <SupplierScorecards />
-      <RiskVisualization />
-      <ImpactSimulator />
-      <AuditLogFeed />
+      <BomExplorer rows={snapshot.bom.items} />
+      <SupplierScorecards suppliers={snapshot.suppliers} />
+      <RiskVisualization risk={snapshot.risk} />
+      <ImpactSimulator
+        bomId={snapshot.bom.id}
+        regulationCode="PFAS"
+        initialScenario={snapshot.impact}
+      />
+      <AuditLogFeed entries={snapshot.auditLogs} />
       <RoleGate allow={["analyst", "admin"]} fallback={<LockedCard label="Ops Center" />}>
-        <IngestionOpsCenter />
+        <IngestionOpsCenter issues={snapshot.ingestionIssues} />
       </RoleGate>
       <RoleGate allow={["admin"]} fallback={<LockedCard label="SLA Monitor (admin only)" />}>
-        <SlaMonitor />
+        <SlaMonitor entries={snapshot.slaLeaderboard} />
       </RoleGate>
     </main>
   );

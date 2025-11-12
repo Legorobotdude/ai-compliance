@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { TenantID, UUID } from './schema';
+import type { TenantID, UUID } from './schema.js';
 
 export interface TenantExecutionContext {
   tenantId: TenantID;

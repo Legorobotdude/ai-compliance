@@ -1,9 +1,13 @@
 "use client";
 
-import { slaLeaderboard } from "@/lib/data/mock-dashboard";
+import type { SlaLeaderboardEntry } from "@/lib/types/dashboard";
 import { SectionCard } from "@/components/ui/section-card";
 
-export function SlaMonitor() {
+type SlaMonitorProps = {
+  entries: SlaLeaderboardEntry[];
+};
+
+export function SlaMonitor({ entries }: SlaMonitorProps) {
   return (
     <SectionCard
       title="Supplier SLA Monitor"
@@ -21,11 +25,11 @@ export function SlaMonitor() {
             </tr>
           </thead>
           <tbody>
-            {slaLeaderboard.map((record) => (
-              <tr key={record.supplier} className="border-t border-slate-800 text-slate-200">
-                <td className="px-4 py-3 font-medium text-white">{record.supplier}</td>
+            {entries.map((record) => (
+              <tr key={record.supplierId} className="border-t border-slate-800 text-slate-200">
+                <td className="px-4 py-3 font-medium text-white">{record.supplierName}</td>
                 <td className="px-4 py-3">{record.avgDays.toFixed(1)}</td>
-                <td className="px-4 py-3">{record.slaDays} days</td>
+                <td className="px-4 py-3">{record.slaTargetDays} days</td>
                 <td className="px-4 py-3">{record.openWorkflows}</td>
                 <td className="px-4 py-3">
                   <span
@@ -40,6 +44,9 @@ export function SlaMonitor() {
             ))}
           </tbody>
         </table>
+        {!entries.length ? (
+          <p className="px-4 py-3 text-sm text-slate-500">No open workflows to track.</p>
+        ) : null}
       </div>
     </SectionCard>
   );

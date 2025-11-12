@@ -1,0 +1,19 @@
+{
+  "name": "@certivo/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "eslint \"src/**/*.ts\"",
+    "test": "echo 'TODO: add tests' && exit 0"
+  },
+  "dependencies": {
+    "@certivo/compliance": "workspace:*",
+    "@certivo/lib-db": "workspace:*",
+    "@certivo/risk-impact": "workspace:*",
+    "@certivo/supplier": "workspace:*"
+  }
+}

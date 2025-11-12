@@ -1,6 +1,6 @@
 import { Pool, PoolClient, type PoolConfig } from 'pg';
-import { TenantID } from './schema';
-import { getTenantContext } from './tenant-context';
+import { TenantID } from './schema.js';
+import { getTenantContext } from './tenant-context.js';
 
 export interface QueryConfig {
   text: string;

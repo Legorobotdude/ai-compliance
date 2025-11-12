@@ -16,12 +16,21 @@ import {
   Cell
 } from "recharts";
 
-import { riskSnapshot } from "@/lib/data/mock-dashboard";
+import type { RiskSummary } from "@/lib/types/dashboard";
 import { SectionCard } from "@/components/ui/section-card";
 
 const donutColors = ["#34d399", "#60a5fa", "#fbbf24", "#f87171"];
 
-export function RiskVisualization() {
+type RiskVisualizationProps = {
+  risk: RiskSummary;
+};
+
+export function RiskVisualization({ risk }: RiskVisualizationProps) {
+  const frameworkData = risk.frameworks.map((framework) => ({
+    ...framework,
+    percent: Math.round(framework.percent * 100)
+  }));
+
   return (
     <SectionCard
       title="Risk Visualization"
@@ -34,20 +43,20 @@ export function RiskVisualization() {
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={riskSnapshot.frameworks}
+                data={frameworkData}
                 innerRadius={60}
                 outerRadius={90}
                 dataKey="percent"
                 nameKey="name"
                 paddingAngle={4}
               >
-                {riskSnapshot.frameworks.map((entry, index) => (
+                {frameworkData.map((entry, index) => (
                   <Cell key={entry.name} fill={donutColors[index % donutColors.length]} />
                 ))}
               </Pie>
               <Tooltip
                 contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px" }}
-                formatter={(value: number) => `${Math.round(value * 100)}%`}
+                formatter={(value: number) => `${value}%`}
               />
             </PieChart>
           </ResponsiveContainer>
@@ -56,7 +65,7 @@ export function RiskVisualization() {
         <div className="h-64 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
           <p className="text-sm text-slate-400">Risk trend (rolling 6 weeks)</p>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={riskSnapshot.trend}>
+            <LineChart data={risk.trend}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis dataKey="label" stroke="#94a3b8" />
               <YAxis stroke="#94a3b8" domain={[40, 95]} />
@@ -78,7 +87,14 @@ export function RiskVisualization() {
               <YAxis type="number" dataKey="exposure" name="exposure" stroke="#94a3b8" />
               <ZAxis type="number" dataKey="exposure" range={[60, 200]} />
               <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px" }} />
-              <Scatter data={riskSnapshot.supplierBubbles} fill="#fbbf24" />
+              <Scatter
+                data={
+                  risk.supplierExposure.length
+                    ? risk.supplierExposure
+                    : [{ supplierName: "No incidents", incidents: 0, exposure: 0, supplierId: "none" }]
+                }
+                fill="#fbbf24"
+              />
             </ScatterChart>
           </ResponsiveContainer>
         </div>

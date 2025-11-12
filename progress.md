@@ -37,3 +37,13 @@
 - Replaced the placeholder web package with a real Next.js 14 + Tailwind app (apps/web) per Architecture.md §6, including shared Role context, TanStack virtual table, Recharts visualizations, Impact Simulator controls, CORA audit feed, Ops Center stream, and SLA monitor gates.
 - Added localized supplier outreach previews (de/zh/en), status badge helpers, mock data generators, and SectionCard primitives so the dashboard mirrors the Architecture spec.
 - Updated workspace lint/typecheck/build scripts plus Tailwind/PostCSS/tsconfig overrides, ensuring `pnpm --filter @certivo/web lint|typecheck|build` all pass.
+
+## Dashboard data wiring
+- Implemented `@certivo/dashboard` service + `/dashboard/snapshot` API endpoint that aggregates BOM coverage, supplier scorecards, risk stats, audit logs, ingestion issues, SLA leaderboard, and default PFAS impact previews straight from Postgres (Architecture.md §6–§7).
+- Replaced the frontend mock data with live fetches (server components + proxy route for `/api/impact`) so BOM Explorer, Supplier Scorecards, Risk viz, Impact Simulator, Audit feed, Ops Center, and SLA monitor all render the seeded tenant data behind JWT auth.
+- Added Certivo API env helpers plus docs for `CERTIVO_API_URL`/`CERTIVO_API_TOKEN` so `pnpm --filter @certivo/web dev|build` knows how to authenticate against the Express gateway.
+
+## Recent updates
+- Corrected the dev JWT generator (`infra/docker/generate-dev-token.mjs`) to emit HS256 signatures without double-encoding so Architecture.md §7 auth flows accept tokens in local dashboard sessions again.
+- Bootstrapped the local dev runtime: brought up Docker Compose services, ran `pnpm db:migrate`/`pnpm db:seed`, generated the seed tenant JWT, and launched the API (`node dist/main.js`) plus web (`pnpm dev`) with `CERTIVO_API_URL`/`CERTIVO_API_TOKEN` configured. Noted a `/dashboard/snapshot` 500 caused by `impact_scenarios` JSON insertion (see API logs) while verifying the dash fetch.
+- Patched `RiskRepository.recordScenarioResult` to persist structured JSON (regulation metadata + deltas) and rebuilt/restarted services, restoring `/dashboard/snapshot` and the Next.js dashboard to 200 responses.
