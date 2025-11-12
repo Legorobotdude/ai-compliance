@@ -64,3 +64,7 @@ pnpm-debug.log*
 *.temp
 .cache/
 
+# Next.js
+.next/
+out/
+

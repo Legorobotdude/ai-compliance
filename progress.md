@@ -11,6 +11,11 @@
 - Built out module layers (controllers/services/repositories/DTOs) for Compliance, Supplier, Risk/Impact, File/Document, Jobs & Workflows, Search/RAG, and Gateway, all referencing the shared schema.
 - Added `ApiModuleFactory` to wire modules together, and worker bootstrap helpers for Temporal orchestration.
 
+## Database & local infra
+- Authored SQL migrations (`infra/db/migrations/*.sql`) to create the Architecture.md §2 data model, helper triggers, the `create_bom` procedure, materialized-style compliance views, and the regulation search function expected by the repositories.
+- Added a pgvector-enabled Postgres + Redis stack via `infra/docker/docker-compose.yml` plus README instructions for bootstrapping local services.
+- Introduced a migration runner (`libs/db/scripts/run-migrations.mjs`) with `pnpm db:migrate` to keep environments in sync, plus a deterministic seed script (`libs/db/scripts/seed-sample-data.mjs`) wired to `pnpm db:seed` to load the sample tenant/BOM/suppliers/certificates.
+
 ## API runtime
 - Implemented Express server in `apps/api/src/main.ts` with tenant middleware, JSON parsing, centralized error handling, and route adapters that forward to gateway controllers.
 - Added a placeholder `WorkflowClient` implementation and environment-driven Postgres connection (via `createPgDatabaseClient`).

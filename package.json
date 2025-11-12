@@ -6,7 +6,9 @@
   "scripts": {
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "db:migrate": "pnpm --filter @certivo/lib-db migrate",
+    "db:seed": "pnpm --filter @certivo/lib-db seed"
   },
   "keywords": [],
   "author": "",

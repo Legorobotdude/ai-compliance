@@ -8,7 +8,9 @@
   "scripts": {
     "build": "tsc -b",
     "lint": "eslint \"src/**/*.ts\"",
-    "test": "echo 'TODO: add tests' && exit 0"
+    "test": "echo 'TODO: add tests' && exit 0",
+    "migrate": "node ./scripts/run-migrations.mjs",
+    "seed": "node ./scripts/seed-sample-data.mjs"
   },
   "dependencies": {
     "@types/pg": "^8.15.6",
