@@ -25,23 +25,27 @@ export function SlaMonitor({ entries }: SlaMonitorProps) {
             </tr>
           </thead>
           <tbody>
-            {entries.map((record) => (
-              <tr key={record.supplierId} className="border-t border-slate-800 text-slate-200">
-                <td className="px-4 py-3 font-medium text-white">{record.supplierName}</td>
-                <td className="px-4 py-3">{record.avgDays.toFixed(1)}</td>
-                <td className="px-4 py-3">{record.slaTargetDays} days</td>
-                <td className="px-4 py-3">{record.openWorkflows}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs ${
-                      record.escalations > 0 ? "bg-red-500/20 text-red-200" : "bg-emerald-500/20 text-emerald-200"
-                    }`}
-                  >
-                    {record.escalations}
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {entries.map((record) => {
+              const avgDaysValue = Number(record.avgDays);
+              const avgDaysDisplay = Number.isFinite(avgDaysValue) ? avgDaysValue.toFixed(1) : "—";
+              return (
+                <tr key={record.supplierId} className="border-t border-slate-800 text-slate-200">
+                  <td className="px-4 py-3 font-medium text-white">{record.supplierName}</td>
+                  <td className="px-4 py-3">{avgDaysDisplay}</td>
+                  <td className="px-4 py-3">{record.slaTargetDays} days</td>
+                  <td className="px-4 py-3">{record.openWorkflows}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs ${
+                        record.escalations > 0 ? "bg-red-500/20 text-red-200" : "bg-emerald-500/20 text-emerald-200"
+                      }`}
+                    >
+                      {record.escalations}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         {!entries.length ? (

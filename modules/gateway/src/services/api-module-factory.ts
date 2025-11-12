@@ -5,7 +5,8 @@ import { RiskImpactController, RiskImpactService, RiskRepository } from '@certiv
 import { DocumentController, DocumentRepository, DocumentService } from '@certivo/file-document';
 import { SearchController, SearchRepository, SearchService } from '@certivo/search-rag';
 import { WorkflowRepository, WorkflowService, type WorkflowClient } from '@certivo/jobs-workflows';
-import { ApiController } from '../controllers/api-controller';
+import { DashboardController, DashboardRepository, DashboardService } from '@certivo/dashboard';
+import { ApiController } from '../controllers/api-controller.js';
 
 export interface ApiModuleOptions {
   db: DatabaseClient;
@@ -34,6 +35,10 @@ export class ApiModuleFactory {
     const searchService = new SearchService(searchRepo);
     const searchController = new SearchController(searchService);
 
+    const dashboardRepo = new DashboardRepository(options.db);
+    const dashboardService = new DashboardService(dashboardRepo, riskService);
+    const dashboardController = new DashboardController(dashboardService);
+
     const workflowRepo = new WorkflowRepository(options.db);
     const workflowService = new WorkflowService(workflowRepo, options.workflowClient);
     // Workflow service is returned for worker wiring but not required by ApiController at the moment.
@@ -44,7 +49,8 @@ export class ApiModuleFactory {
       supplierController,
       riskController,
       docController,
-      searchController
+      searchController,
+      dashboardController
     );
   }
 }

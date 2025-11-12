@@ -8,6 +8,8 @@ import type { FetchRequest, UploadRequest } from '@certivo/file-document';
 import { DocumentController } from '@certivo/file-document';
 import type { SearchQuery } from '@certivo/search-rag';
 import { SearchController } from '@certivo/search-rag';
+import type { DashboardSnapshotDto } from '@certivo/dashboard';
+import { DashboardController } from '@certivo/dashboard';
 import type { UUID } from '@certivo/lib-db';
 import type { HttpRequest, HttpResponse } from '../types/http';
 
@@ -17,7 +19,8 @@ export class ApiController {
     private readonly supplier: SupplierController,
     private readonly risk: RiskImpactController,
     private readonly documents: DocumentController,
-    private readonly search: SearchController
+    private readonly search: SearchController,
+    private readonly dashboard: DashboardController
   ) {}
 
   async postBomUpload(req: HttpRequest<BomUploadRequest>, res: HttpResponse) {
@@ -74,5 +77,16 @@ export class ApiController {
     };
     const result = await this.search.search(payload);
     res.status(200).json(result);
+  }
+
+  async getDashboardSnapshot(
+    req: HttpRequest<unknown, Record<string, string>, { bomId?: string }>,
+    res: HttpResponse
+  ) {
+    const snapshot: DashboardSnapshotDto = await this.dashboard.snapshot({
+      tenantId: req.tenantId,
+      bomId: req.query.bomId ? (req.query.bomId as UUID) : undefined
+    });
+    res.status(200).json(snapshot);
   }
 }

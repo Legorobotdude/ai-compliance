@@ -89,14 +89,18 @@ export class DashboardService {
       message: issue.message,
       createdAt: issue.createdAt
     }));
-    const slaLeaderboard = slaAggregates.map<SlaLeaderboardEntryDto>((row) => ({
-      supplierId: row.supplierId,
-      supplierName: row.supplierName,
-      avgDays: roundNumber(row.avgDays ?? 0),
-      slaTargetDays: Math.max(1, Math.round(row.slaTargetDays ?? 5)),
-      openWorkflows: row.openWorkflows,
-      escalations: row.escalations
-    }));
+    const slaLeaderboard = slaAggregates.map<SlaLeaderboardEntryDto>((row) => {
+      const avgDaysValue = row.avgDays == null ? 0 : Number(row.avgDays);
+      const slaTargetValue = row.slaTargetDays == null ? undefined : Number(row.slaTargetDays);
+      return {
+        supplierId: row.supplierId,
+        supplierName: row.supplierName,
+        avgDays: roundNumber(avgDaysValue),
+        slaTargetDays: Math.max(1, Math.round(slaTargetValue ?? 5)),
+        openWorkflows: row.openWorkflows,
+        escalations: row.escalations
+      };
+    });
 
     return {
       tenantId,
