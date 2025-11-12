@@ -44,6 +44,9 @@ importers:
       '@certivo/jobs-workflows':
         specifier: workspace:*
         version: link:../../modules/jobs-workflows
+      '@certivo/lib-auth':
+        specifier: workspace:*
+        version: link:../../libs/auth
       '@certivo/lib-db':
         specifier: workspace:*
         version: link:../../libs/db
@@ -128,7 +131,11 @@ importers:
         specifier: workspace:*
         version: link:../../libs/db
 
-  libs/auth: {}
+  libs/auth:
+    dependencies:
+      jose:
+        specifier: ^5.9.3
+        version: 5.10.0
 
   libs/config: {}
 
@@ -1090,6 +1097,9 @@ packages:
   jiti@1.21.7:
     resolution: {integrity: sha512-/imKNG4EbWNrVjoNC/1H5/9GFy+tqjGBHCaSsN+P2RnPqjsLmv6UD3Ej+Kj8nBWaRAwyk7kK5ZUc+OEatnTR3A==}
     hasBin: true
+
+  jose@5.10.0:
+    resolution: {integrity: sha512-s+3Al/p9g32Iq+oqXxkW//7jk2Vig6FF1CFqzVXoTUXt2qz89YWbL+OwS17NFYEvxC35n0FKeGO2LGYSxeM2Gg==}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -2675,6 +2685,8 @@ snapshots:
       '@pkgjs/parseargs': 0.11.0
 
   jiti@1.21.7: {}
+
+  jose@5.10.0: {}
 
   js-tokens@4.0.0: {}
 

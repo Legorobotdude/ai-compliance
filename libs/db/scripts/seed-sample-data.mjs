@@ -597,6 +597,7 @@ async function seed() {
     const userId = deterministicUuid('user:ops@acme.example.com');
     const productId = deterministicUuid('product:industrial-smart-hub-v2');
 
+    await client.query(`select set_config('app.bypass_rls', 'on', false)`);
     await client.query('begin');
     await upsertTenant(client, tenantId);
     await upsertUser(client, tenantId, userId);
@@ -618,6 +619,7 @@ async function seed() {
     console.error(error);
     process.exitCode = 1;
   } finally {
+    await client.query(`select set_config('app.bypass_rls', 'off', false)`);
     client.release();
     await pool.end();
   }

@@ -16,6 +16,11 @@
 - Added a pgvector-enabled Postgres + Redis stack via `infra/docker/docker-compose.yml` plus README instructions for bootstrapping local services.
 - Introduced a migration runner (`libs/db/scripts/run-migrations.mjs`) with `pnpm db:migrate` to keep environments in sync, plus a deterministic seed script (`libs/db/scripts/seed-sample-data.mjs`) wired to `pnpm db:seed` to load the sample tenant/BOM/suppliers/certificates.
 
+## Security & auth
+- API now validates OAuth2.1/JWT access tokens via `@certivo/lib-auth` (JWKS or HS256 secret), derives tenant + roles from claims, and propagates identities to controllers/logs.
+- Added AsyncLocalStorage-backed tenant contexts in `@certivo/lib-db` so every Postgres query sets `app.current_tenant`/`app.current_roles`, enabling enforced RLS policies.
+- Authored `003_rls_policies.sql` to enable and force row-level security across tenant tables/views, plus convenience helpers/seed bypass hooks so local scripts remain idempotent.
+
 ## API runtime
 - Implemented Express server in `apps/api/src/main.ts` with tenant middleware, JSON parsing, centralized error handling, and route adapters that forward to gateway controllers.
 - Added a placeholder `WorkflowClient` implementation and environment-driven Postgres connection (via `createPgDatabaseClient`).

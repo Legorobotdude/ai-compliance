@@ -21,13 +21,25 @@ import type { UploadRequest } from '@certivo/file-document';
 import type { ImpactPredictRequest } from '@certivo/risk-impact';
 import type { SupplierRequestInput } from '@certivo/supplier';
 import type { WorkflowClient, IngestionRetryTrigger, SupplierWorkflowTrigger } from '@certivo/jobs-workflows';
-import { createPgDatabaseClient, type DatabaseClient } from '@certivo/lib-db';
+import { createPgDatabaseClient, runWithTenantContext, type DatabaseClient } from '@certivo/lib-db';
 import { createLogger, createRequestLogger, type Logger } from '@certivo/lib-logging';
+import {
+  AuthorizationError,
+  JwtVerifier,
+  extractBearerToken,
+  type AuthenticatedUser
+} from '@certivo/lib-auth';
 
 const PORT = Number(process.env.PORT ?? 4000);
 const DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://localhost:5432/certivo';
-const TENANT_HEADER = 'x-tenant-id';
 const API_VERSION = '2024-01-31';
+const AUTH_ISSUER = process.env.AUTH_ISSUER ?? 'https://auth.certivo.local/';
+const AUTH_AUDIENCE = process.env.AUTH_AUDIENCE;
+const AUTH_JWKS_URL = process.env.AUTH_JWKS_URL;
+const AUTH_JWT_SECRET = process.env.AUTH_JWT_SECRET;
+const AUTH_TENANT_CLAIM = process.env.AUTH_TENANT_CLAIM;
+const AUTH_ROLES_CLAIM = process.env.AUTH_ROLES_CLAIM;
+const AUTH_EMAIL_CLAIM = process.env.AUTH_EMAIL_CLAIM;
 type MetricLabel = 'method' | 'route' | 'status';
 
 class NoopWorkflowClient implements WorkflowClient {
@@ -46,7 +58,22 @@ export async function startApiServer(): Promise<void> {
   const metrics = createApiMetrics();
   const workflowClient = new NoopWorkflowClient();
   const apiController = ApiModuleFactory.create({ db, workflowClient });
-  const app = buildApp({ controller: apiController, db, logger, metrics });
+  if (!AUTH_JWKS_URL && !AUTH_JWT_SECRET) {
+    logger.error(
+      'Set AUTH_JWKS_URL (recommended) or AUTH_JWT_SECRET so the API can verify JWTs before starting the server.'
+    );
+    process.exit(1);
+  }
+  const jwtVerifier = new JwtVerifier({
+    issuer: AUTH_ISSUER,
+    audience: AUTH_AUDIENCE,
+    jwksUrl: AUTH_JWKS_URL,
+    sharedSecret: AUTH_JWT_SECRET,
+    tenantClaim: AUTH_TENANT_CLAIM,
+    rolesClaim: AUTH_ROLES_CLAIM,
+    emailClaim: AUTH_EMAIL_CLAIM
+  });
+  const app = buildApp({ controller: apiController, db, logger, metrics, jwtVerifier });
 
   const server = app.listen(PORT, () => {
     logger.info({ port: PORT }, '[api] listening');
@@ -68,10 +95,11 @@ interface BuildAppOptions {
   db: DatabaseClient;
   logger: Logger;
   metrics: ApiMetrics;
+  jwtVerifier: JwtVerifier;
 }
 
 function buildApp(options: BuildAppOptions): Express {
-  const { controller, db, logger, metrics } = options;
+  const { controller, db, logger, metrics, jwtVerifier } = options;
   const app = express();
   app.use(express.json({ limit: '10mb' }));
   app.use(requestContextMiddleware(logger));
@@ -86,7 +114,8 @@ function buildApp(options: BuildAppOptions): Express {
   app.get('/readyz', readinessHandler(db));
   app.get('/metrics', metricsHandler(metrics));
 
-  app.use(tenantMiddleware);
+  app.use(authMiddleware(jwtVerifier));
+  app.use(tenantContextMiddleware);
 
   app.post(
     '/bom/upload',
@@ -187,18 +216,43 @@ function buildApp(options: BuildAppOptions): Express {
   return app;
 }
 
-function tenantMiddleware(req: Request, res: Response, next: NextFunction) {
-  const tenantId = req.header(TENANT_HEADER) ?? undefined;
-  if (!tenantId) {
-    res.status(400).json({ error: 'Missing X-Tenant-Id header' });
+function authMiddleware(verifier: JwtVerifier) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const token = extractBearerToken(req.header('authorization'));
+      const user = await verifier.verify(token);
+      const tenantReq = req as TenantRequest;
+      tenantReq.user = user;
+      tenantReq.tenantId = user.tenantId;
+      if (tenantReq.log) {
+        tenantReq.log = tenantReq.log.child({ tenantId: user.tenantId, userId: user.userId });
+      }
+      next();
+    } catch (error) {
+      const status = error instanceof AuthorizationError ? error.status : 401;
+      const tenantReq = req as Partial<TenantRequest>;
+      const logErr = error instanceof Error ? error : new Error('authorization failed');
+      tenantReq.log?.warn({ err: logErr }, 'authorization.failed');
+      res.status(status).json({ error: 'Unauthorized' });
+    }
+  };
+}
+
+function tenantContextMiddleware(req: Request, res: Response, next: NextFunction) {
+  const tenantReq = req as TenantRequest;
+  if (!tenantReq.tenantId) {
+    res.status(500).json({ error: 'Tenant context missing' });
     return;
   }
-  const tenantReq = req as TenantRequest;
-  tenantReq.tenantId = tenantId;
-  if (tenantReq.log) {
-    tenantReq.log = tenantReq.log.child({ tenantId });
-  }
-  next();
+  runWithTenantContext(
+    {
+      tenantId: tenantReq.tenantId,
+      roles: tenantReq.user?.roles ?? [],
+      userId: tenantReq.user?.userId,
+      email: tenantReq.user?.email
+    },
+    () => next()
+  );
 }
 
 function route(label: string, handler: (req: TenantRequest, res: Response) => Promise<void> | void) {
@@ -233,6 +287,7 @@ interface TenantRequest extends Request {
   requestId: string;
   log: Logger;
   routeLabel?: string;
+  user?: AuthenticatedUser;
 }
 
 function buildHttpRequest<TBody = unknown, TParams extends Record<string, string> = Record<string, string>, TQuery extends Record<string, string> = Record<string, string>>(

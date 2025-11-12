@@ -1,5 +1,6 @@
 import { Pool, PoolClient, type PoolConfig } from 'pg';
 import { TenantID } from './schema';
+import { getTenantContext } from './tenant-context';
 
 export interface QueryConfig {
   text: string;
@@ -24,12 +25,22 @@ class PgPoolDatabaseClient implements DatabaseClient {
       text: config.text,
       values: config.values as unknown[] | undefined
     };
-    const result = await this.pool.query(pgConfig);
-    return result.rows as T[];
+    const client = await this.pool.connect();
+    const contextApplied = await applyTenantContext(client);
+    try {
+      const result = await client.query(pgConfig);
+      return result.rows as T[];
+    } finally {
+      if (contextApplied) {
+        await resetTenantContext(client);
+      }
+      client.release();
+    }
   }
 
   async withTransaction<T>(callback: (tx: DatabaseClient) => Promise<T>): Promise<T> {
     const client = await this.pool.connect();
+    const contextApplied = await applyTenantContext(client);
     try {
       await client.query('BEGIN');
       const transactional = new PgSingleClient(client);
@@ -40,6 +51,9 @@ class PgPoolDatabaseClient implements DatabaseClient {
       await client.query('ROLLBACK');
       throw error;
     } finally {
+      if (contextApplied) {
+        await resetTenantContext(client);
+      }
       client.release();
     }
   }
@@ -74,4 +88,33 @@ export function createPgDatabaseClient(config: PgClientConfig): PgClientFactoryR
   const pool = new Pool(config);
   const db = new PgPoolDatabaseClient(pool);
   return { pool, db };
+}
+
+const SET_CONTEXT_SQL = `
+select
+  set_config('app.current_tenant', $1, false),
+  set_config('app.current_roles', $2, false),
+  set_config('app.current_user', $3, false)
+`;
+
+const RESET_CONTEXT_SQL = `
+select
+  set_config('app.current_tenant', '', false),
+  set_config('app.current_roles', '', false),
+  set_config('app.current_user', '', false)
+`;
+
+async function applyTenantContext(client: PoolClient): Promise<boolean> {
+  const context = getTenantContext();
+  if (!context) {
+    return false;
+  }
+  const roles = context.roles?.length ? context.roles.join(',') : '';
+  const userId = context.userId ?? '';
+  await client.query(SET_CONTEXT_SQL, [context.tenantId, roles, userId]);
+  return true;
+}
+
+async function resetTenantContext(client: PoolClient): Promise<void> {
+  await client.query(RESET_CONTEXT_SQL);
 }

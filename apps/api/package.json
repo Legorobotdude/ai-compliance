@@ -15,6 +15,7 @@
     "@certivo/file-document": "workspace:*",
     "@certivo/gateway": "workspace:*",
     "@certivo/jobs-workflows": "workspace:*",
+    "@certivo/lib-auth": "workspace:*",
     "@certivo/lib-db": "workspace:*",
     "@certivo/lib-logging": "workspace:*",
     "@certivo/risk-impact": "workspace:*",

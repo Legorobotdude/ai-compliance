@@ -13,7 +13,7 @@ IMPORTANT: Update progress.md with completed work
 - `pnpm build`: Runs `tsc -b` across all workspaces to ensure TypeScript output is clean.
 - `pnpm lint`: Executes ESLint via the flat config for every package.
 - `pnpm test`: Placeholder command per package (replace with real test runners when ready).
-- `pnpm --filter @certivo/api dev`: (after adding a script) start the Express API locally. Set `DATABASE_URL` and send `X-Tenant-Id` headers when calling endpoints.
+- `pnpm --filter @certivo/api dev`: (after adding a script) start the Express API locally. Set `DATABASE_URL`, `AUTH_ISSUER`, `AUTH_AUDIENCE`, and either `AUTH_JWKS_URL` or `AUTH_JWT_SECRET`, then call endpoints with a real `Authorization: Bearer <jwt>` header (no `X-Tenant-Id` escape hatch).
 
 ## Coding Style & Naming Conventions
 - TypeScript targets ES2022, strict mode, `moduleResolution: bundler`, ESM modules. Prefer descriptive async methods (`verbNounAsync` optional) and export named symbols.
@@ -26,4 +26,4 @@ IMPORTANT: Update progress.md with completed work
 
 ## Commit & Pull Request Guidelines
 - Follow conventional, descriptive commits (e.g., `feat: add supplier module DTOs`, `chore: update pnpm tooling`). Keep history atomic.
-- PRs should describe the change, reference Architecture.md sections when relevant, link issues/tickets, and include testing notes (commands + outcomes). Add screenshots for UI updates and note any schema migrations or env variable additions.
+- PRs should describe the change, reference Architecture.md sections when relevant, link issues/tickets, and include testing notes (commands + outcomes). Add screenshots for UI updates and note any schema migrations or env variable additions (call out new auth env vars when applicable).

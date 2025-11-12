@@ -280,7 +280,9 @@ else: COMPLIANT
 
 ## 7) Security, Privacy, Monitoring
 
-**AuthN/Z:** OAuth2.1 + PKCE (Auth0/WorkOS/DIY), JWT with `tenant_id`, `roles`. Backend enforces RLS.
+**AuthN/Z:** OAuth2.1 + PKCE (Auth0/WorkOS/DIY), JWT with `tenant_id`, `roles`. The gateway validates every request via `Authorization: Bearer <token>` (no more `X-Tenant-Id` escape hatch) using either a remote JWKS (`AUTH_JWKS_URL`) or an HMAC fallback (`AUTH_JWT_SECRET`) plus issuer/audience guards (`AUTH_ISSUER`, `AUTH_AUDIENCE`). Tokens must include `tenant_id`, `roles`, and optional `email` claims; these propagate into an AsyncLocalStorage-backed tenant context so every Postgres query automatically executes with `set_config('app.current_*', …)` before hitting the RLS-protected tables.
+
+**Row-Level Security:** `infra/db/migrations/003_rls_policies.sql` enables+forces RLS across every tenant-owned table/view, adds helper functions (`app_private.current_tenant`, `app_private.roles`, `app_private.bypass_rls`), and seeds deterministic policies for join tables (supplier contacts, certificate findings, regulation embeddings). Background scripts or data loads toggle `app.bypass_rls` explicitly when cross-tenant access is required.
 
 **Secrets:** AWS Secrets Manager/SSM; no LLM keys in client.
 
