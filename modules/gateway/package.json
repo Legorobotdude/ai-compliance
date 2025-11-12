@@ -1,0 +1,22 @@
+{
+  "name": "@certivo/gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "eslint \"src/**/*.ts\"",
+    "test": "echo 'TODO: add tests' && exit 0"
+  },
+  "dependencies": {
+    "@certivo/lib-db": "workspace:*",
+    "@certivo/compliance": "workspace:*",
+    "@certivo/supplier": "workspace:*",
+    "@certivo/risk-impact": "workspace:*",
+    "@certivo/file-document": "workspace:*",
+    "@certivo/search-rag": "workspace:*",
+    "@certivo/jobs-workflows": "workspace:*"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@certivo/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "eslint \"src/**/*.ts\"",
+    "test": "echo 'TODO: add tests' && exit 0"
+  },
+  "dependencies": {
+    "@certivo/compliance": "workspace:*",
+    "@certivo/file-document": "workspace:*",
+    "@certivo/gateway": "workspace:*",
+    "@certivo/jobs-workflows": "workspace:*",
+    "@certivo/lib-db": "workspace:*",
+    "@certivo/risk-impact": "workspace:*",
+    "@certivo/supplier": "workspace:*",
+    "@types/express": "^5.0.5",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/qs": "^6.14.0"
+  }
+}

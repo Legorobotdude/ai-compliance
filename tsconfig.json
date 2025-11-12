@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "files": [],
+  "references": [
+    { "path": "apps/api" },
+    { "path": "apps/web" },
+    { "path": "apps/worker" },
+    { "path": "modules/gateway" },
+    { "path": "modules/compliance" },
+    { "path": "modules/risk-impact" },
+    { "path": "modules/supplier" },
+    { "path": "modules/file-document" },
+    { "path": "modules/jobs-workflows" },
+    { "path": "modules/search-rag" },
+    { "path": "libs/auth" },
+    { "path": "libs/config" },
+    { "path": "libs/db" },
+    { "path": "libs/logging" },
+    { "path": "libs/tracing" },
+    { "path": "libs/test-utils" }
+  ]
+}

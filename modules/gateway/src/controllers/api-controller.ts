@@ -1,0 +1,73 @@
+import type { BomUploadRequest, MergedViewRequest } from '@certivo/compliance';
+import { ComplianceController } from '@certivo/compliance';
+import type { ImpactPredictRequest } from '@certivo/risk-impact';
+import { RiskImpactController } from '@certivo/risk-impact';
+import type { ScorecardRequest, SupplierRequestInput } from '@certivo/supplier';
+import { SupplierController } from '@certivo/supplier';
+import type { FetchRequest, UploadRequest } from '@certivo/file-document';
+import { DocumentController } from '@certivo/file-document';
+import type { SearchQuery } from '@certivo/search-rag';
+import { SearchController } from '@certivo/search-rag';
+import type { UUID } from '@certivo/lib-db';
+import type { HttpRequest, HttpResponse } from '../types/http';
+
+export class ApiController {
+  constructor(
+    private readonly compliance: ComplianceController,
+    private readonly supplier: SupplierController,
+    private readonly risk: RiskImpactController,
+    private readonly documents: DocumentController,
+    private readonly search: SearchController
+  ) {}
+
+  async postBomUpload(req: HttpRequest<BomUploadRequest>, res: HttpResponse) {
+    const result = await this.compliance.uploadBom(req.body);
+    res.status(201).json(result);
+  }
+
+  async getMerged(req: HttpRequest<unknown, { bomId: string }>, res: HttpResponse) {
+    const payload: MergedViewRequest = { tenantId: req.tenantId, bomId: req.params.bomId as unknown as UUID };
+    const result = await this.compliance.mergedStatus(payload);
+    res.status(200).json(result);
+  }
+
+  async getSupplierScorecard(req: HttpRequest<unknown, { supplierId: string }>, res: HttpResponse) {
+    const payload: ScorecardRequest = { tenantId: req.tenantId, supplierId: req.params.supplierId as unknown as UUID };
+    const result = await this.supplier.scorecard(payload);
+    res.status(200).json(result);
+  }
+
+  async postSupplierRequest(req: HttpRequest<SupplierRequestInput>, res: HttpResponse) {
+    const result = await this.supplier.createRequest(req.body);
+    res.status(202).json(result);
+  }
+
+  async postImpactPredict(req: HttpRequest<ImpactPredictRequest>, res: HttpResponse) {
+    const result = await this.risk.predict(req.body);
+    res.status(200).json(result);
+  }
+
+  async postDocumentUpload(req: HttpRequest<UploadRequest>, res: HttpResponse) {
+    const result = await this.documents.upload(req.body);
+    res.status(201).json(result);
+  }
+
+  async getDocument(req: HttpRequest<unknown, { documentId: string }>, res: HttpResponse) {
+    const payload: FetchRequest = { tenantId: req.tenantId, documentId: req.params.documentId as unknown as UUID };
+    const doc = await this.documents.get(payload);
+    res.status(200).json(doc);
+  }
+
+  async getSearch(
+    req: HttpRequest<unknown, Record<string, string>, { q: string; topK?: string }>,
+    res: HttpResponse
+  ) {
+    const payload: SearchQuery = {
+      tenantId: req.tenantId,
+      query: req.query.q,
+      topK: req.query.topK ? Number(req.query.topK) : undefined
+    };
+    const result = await this.search.search(payload);
+    res.status(200).json(result);
+  }
+}
