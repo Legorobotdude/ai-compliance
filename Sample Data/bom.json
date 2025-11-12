@@ -1,0 +1,69 @@
+{
+  "bom_id": "A1234-BOM",
+  "product_name": "Industrial Smart Hub v2",
+  "subassemblies": [
+    {
+      "assembly_id": "SUB-001",
+      "name": "Control Unit",
+      "components": [
+        {
+          "part_number": "CU-78901",
+          "material": "Copper",
+          "weight_g": 8.5
+        },
+        {
+          "part_number": "CU-78902",
+          "material": "Polycarbonate",
+          "weight_g": 5.1
+        },
+        {
+          "part_number": "CU-78903",
+          "material": "Solder",
+          "weight_mg": 1800
+        }
+      ]
+    },
+    {
+      "assembly_id": "SUB-002",
+      "name": "Wireless Module",
+      "components": [
+        {
+          "part_number": "WM-88210",
+          "material": "Tin-Plated Steel",
+          "weight_g": 3.3
+        },
+        {
+          "part_number": "WM-88211",
+          "material": "Beryllium Copper",
+          "weight_g": 1.2
+        },
+        {
+          "part_number": "WM-88212",
+          "material": "ABS",
+          "weight_g": 6.0
+        }
+      ]
+    },
+    {
+      "assembly_id": "SUB-003",
+      "name": "Battery Pack",
+      "components": [
+        {
+          "part_number": "BP-44001",
+          "material": "Lithium Cobalt Oxide",
+          "weight_g": 120.7
+        },
+        {
+          "part_number": "BP-44002",
+          "material": "Graphite",
+          "weight_g": 23.5
+        },
+        {
+          "part_number": "BP-44003",
+          "material": "Nickel",
+          "weight_g": 15.0
+        }
+      ]
+    }
+  ]
+}

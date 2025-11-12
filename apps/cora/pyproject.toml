@@ -1,0 +1,17 @@
+[project]
+name = "cora"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Aditya Bawankule", email = "adityabawankule@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+cora = "cora:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

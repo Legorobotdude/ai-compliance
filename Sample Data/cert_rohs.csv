@@ -1,0 +1,10 @@
+part_number,substance,concentration,unit,threshold_ppm,cert_expiry
+CU-78901,Lead,950,ppm,1000,2025-09-15
+CU-78902,BPA,1.3,mg/kg,500,2023-12-01
+CU-78903,Antimony Trioxide,,mg/kg,900,2025-05-01
+WM-88210,Mercury,0.2,%,1000,2025-11-30
+WM-88211,Lead,1100,ppm,1000,2024-06-01
+WM-88212,Phthalates,1.8,%,,2025-01-01
+BP-44001,PFAS,100,ppm,50,2026-01-01
+BP-44002,Cadmium,0.09,%,100,2024-04-10
+BP-44003,Hexavalent Chromium,200,ppm,1000,2025-08-21
