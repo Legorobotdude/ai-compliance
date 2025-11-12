@@ -6,6 +6,15 @@ import type {
   MergedViewResponse,
   PersistableBom
 } from '../dtos/bom-dtos';
+import type {
+  CertificateFindingInput,
+  CertificateInput,
+  CertificateUploadIssue,
+  CertificateUploadRequest,
+  CertificateUploadResponse,
+  PersistableCertificate,
+  PersistableCertificateFinding
+} from '../dtos/certificate-dtos';
 import { ComplianceRepository } from '../repositories/compliance-repository';
 
 export class ComplianceService {
@@ -77,6 +86,104 @@ export class ComplianceService {
 
   async recordIssue(payload: { tenantId: TenantID; bomId: UUID; partNumber?: string; code: string; message: string }) {
     await this.repo.recordIngestionIssue(payload);
+  }
+
+  async ingestCertificates(request: CertificateUploadRequest): Promise<CertificateUploadResponse> {
+    const items: CertificateUploadResponse['items'] = [];
+    const issues: CertificateUploadIssue[] = [];
+
+    for (const certificateInput of request.certificates) {
+      const certificateRecord = this.toPersistableCertificate(request.tenantId, certificateInput);
+      const normalizedFindings = certificateInput.findings.map((finding) =>
+        this.normalizeFinding(certificateInput, finding, issues)
+      );
+      const dataQualityFlags = normalizedFindings.filter(
+        (finding) => finding.dataQuality && finding.dataQuality !== 'OK'
+      ).length;
+
+      const certificate = await this.repo.withTransaction(async (tx) => {
+        const created = await tx.insertCertificate(certificateRecord);
+        if (normalizedFindings.length > 0) {
+          const withCertificate: PersistableCertificateFinding[] = normalizedFindings.map((finding) => ({
+            ...finding,
+            certificateId: created.id
+          }));
+          await tx.insertCertificateFindings(withCertificate);
+        }
+        return created;
+      });
+
+      items.push({
+        certificateId: certificate.id,
+        findings: normalizedFindings.length,
+        validUntil: certificate.validUntil,
+        dataQualityFlags
+      });
+    }
+
+    return { items, issues };
+  }
+
+  private toPersistableCertificate(tenantId: TenantID, certificate: CertificateInput): PersistableCertificate {
+    const threshold = certificate.thresholdPpm ?? null;
+    const documentLimitSource =
+      certificate.documentLimitSource ?? (threshold != null ? 'DOC' : 'REGULATION');
+    return {
+      tenantId,
+      supplierId: certificate.supplierId,
+      partNumber: certificate.partNumber,
+      type: certificate.type,
+      declarationDate: certificate.declarationDate ?? null,
+      validUntil: certificate.validUntil ?? null,
+      thresholdPpm: threshold,
+      documentLimitSource,
+      sourceDocId: certificate.sourceDocumentId ?? null
+    };
+  }
+
+  private normalizeFinding(
+    certificate: CertificateInput,
+    finding: CertificateFindingInput,
+    issues: CertificateUploadIssue[]
+  ): Omit<PersistableCertificateFinding, 'certificateId'> {
+    let dataQuality: PersistableCertificateFinding['dataQuality'] = 'OK';
+    let concentrationPpm: number | null = null;
+
+    if (finding.concentrationValue == null) {
+      dataQuality = 'VALUE_MISSING';
+      issues.push({
+        code: 'VALUE_MISSING',
+        message: `Missing concentration value for ${finding.substanceName}`,
+        partNumber: certificate.partNumber,
+        substanceName: finding.substanceName
+      });
+    } else if (!finding.concentrationUnit) {
+      dataQuality = 'UNIT_MISSING';
+      issues.push({
+        code: 'UNIT_MISSING',
+        message: `Missing concentration unit for ${finding.substanceName}`,
+        partNumber: certificate.partNumber,
+        substanceName: finding.substanceName
+      });
+    } else {
+      concentrationPpm = this.toPpm(finding.concentrationValue, finding.concentrationUnit);
+    }
+
+    return {
+      substanceName: finding.substanceName,
+      concentrationValue: finding.concentrationValue ?? null,
+      concentrationUnit: finding.concentrationUnit ?? null,
+      concentrationPpm,
+      concentrationRaw: finding.concentrationRaw ?? null,
+      dataQuality
+    };
+  }
+
+  private toPpm(value: number, unit: '%' | 'ppm' | 'mg/kg'): number {
+    if (unit === '%') {
+      return value * 10000;
+    }
+    return value;
   }
 
   private normalizeWeight(weightMg?: number | null, weightG?: number | null): number | null {

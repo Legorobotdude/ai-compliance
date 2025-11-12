@@ -9,5 +9,8 @@
     "build": "tsc -b",
     "lint": "eslint \"src/**/*.ts\"",
     "test": "echo 'TODO: add tests' && exit 0"
+  },
+  "dependencies": {
+    "pino": "^10.1.0"
   }
 }

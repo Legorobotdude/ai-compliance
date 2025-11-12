@@ -2,12 +2,14 @@ import type {
   Bom,
   BomComponent,
   BomSubassembly,
+  Certificate,
   ComplianceStatusRow,
   DatabaseClient,
   TenantID,
   UUID
 } from '@certivo/lib-db';
 import type { IngestionIssueInput, PersistableBom } from '../dtos/bom-dtos';
+import type { PersistableCertificate, PersistableCertificateFinding } from '../dtos/certificate-dtos';
 
 export interface BomAggregate {
   bom: Bom;
@@ -17,6 +19,10 @@ export interface BomAggregate {
 
 export class ComplianceRepository {
   constructor(private readonly db: DatabaseClient) {}
+
+  async withTransaction<T>(callback: (repo: ComplianceRepository) => Promise<T>): Promise<T> {
+    return this.db.withTransaction((tx) => callback(new ComplianceRepository(tx)));
+  }
 
   async createBom(payload: PersistableBom): Promise<UUID> {
     return this.db.withTransaction(async (tx) => {
@@ -66,5 +72,48 @@ export class ComplianceRepository {
              values ($1, $2, $3, $4, $5)`,
       values: [issue.tenantId, issue.bomId, issue.partNumber ?? null, issue.code, issue.message]
     });
+  }
+
+  async insertCertificate(record: PersistableCertificate): Promise<Certificate> {
+    const [row] = await this.db.query<Certificate>({
+      text: `insert into certificates
+             (tenant_id, supplier_id, part_number, type, declaration_date, valid_until, threshold_ppm, document_limit_source, source_doc_id)
+             values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+             returning *`,
+      values: [
+        record.tenantId,
+        record.supplierId,
+        record.partNumber,
+        record.type,
+        record.declarationDate ?? null,
+        record.validUntil ?? null,
+        record.thresholdPpm ?? null,
+        record.documentLimitSource ?? null,
+        record.sourceDocId ?? null
+      ]
+    });
+    if (!row) {
+      throw new Error('Failed to insert certificate');
+    }
+    return row;
+  }
+
+  async insertCertificateFindings(records: PersistableCertificateFinding[]): Promise<void> {
+    for (const record of records) {
+      await this.db.query({
+        text: `insert into certificate_findings
+               (certificate_id, substance_name, concentration_value, concentration_unit, concentration_ppm, concentration_raw, data_quality)
+               values ($1,$2,$3,$4,$5,$6,$7)`,
+        values: [
+          record.certificateId,
+          record.substanceName,
+          record.concentrationValue ?? null,
+          record.concentrationUnit ?? null,
+          record.concentrationPpm ?? null,
+          record.concentrationRaw ?? null,
+          record.dataQuality ?? null
+        ]
+      });
+    }
   }
 }

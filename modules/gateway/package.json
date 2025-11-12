@@ -11,12 +11,13 @@
     "test": "echo 'TODO: add tests' && exit 0"
   },
   "dependencies": {
-    "@certivo/lib-db": "workspace:*",
     "@certivo/compliance": "workspace:*",
-    "@certivo/supplier": "workspace:*",
-    "@certivo/risk-impact": "workspace:*",
     "@certivo/file-document": "workspace:*",
+    "@certivo/jobs-workflows": "workspace:*",
+    "@certivo/lib-db": "workspace:*",
+    "@certivo/risk-impact": "workspace:*",
     "@certivo/search-rag": "workspace:*",
-    "@certivo/jobs-workflows": "workspace:*"
+    "@certivo/supplier": "workspace:*",
+    "zod": "^4.1.12"
   }
 }

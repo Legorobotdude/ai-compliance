@@ -1,4 +1,4 @@
-import type { BomUploadRequest, MergedViewRequest } from '@certivo/compliance';
+import type { BomUploadRequest, CertificateUploadRequest, MergedViewRequest } from '@certivo/compliance';
 import { ComplianceController } from '@certivo/compliance';
 import type { ImpactPredictRequest } from '@certivo/risk-impact';
 import { RiskImpactController } from '@certivo/risk-impact';
@@ -22,6 +22,11 @@ export class ApiController {
 
   async postBomUpload(req: HttpRequest<BomUploadRequest>, res: HttpResponse) {
     const result = await this.compliance.uploadBom(req.body);
+    res.status(201).json(result);
+  }
+
+  async postCertificateUpload(req: HttpRequest<CertificateUploadRequest>, res: HttpResponse) {
+    const result = await this.compliance.uploadCertificates(req.body);
     res.status(201).json(result);
   }
 

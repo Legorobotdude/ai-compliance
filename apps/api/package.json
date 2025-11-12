@@ -16,10 +16,12 @@
     "@certivo/gateway": "workspace:*",
     "@certivo/jobs-workflows": "workspace:*",
     "@certivo/lib-db": "workspace:*",
+    "@certivo/lib-logging": "workspace:*",
     "@certivo/risk-impact": "workspace:*",
     "@certivo/supplier": "workspace:*",
     "@types/express": "^5.0.5",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "prom-client": "^15.1.3"
   },
   "devDependencies": {
     "@types/qs": "^6.14.0"

@@ -15,6 +15,10 @@
 - Implemented Express server in `apps/api/src/main.ts` with tenant middleware, JSON parsing, centralized error handling, and route adapters that forward to gateway controllers.
 - Added a placeholder `WorkflowClient` implementation and environment-driven Postgres connection (via `createPgDatabaseClient`).
 - Ensured `/healthz`, `/bom/upload`, `/merged/:id`, `/supplier/*`, `/impact/predict`, `/documents/*`, and `/search` are all wired.
+- Added structured logging, request correlation IDs, health/ready/metrics probes, Prometheus instrumentation, and request validation (Zod) within the gateway middleware. Wired certificate upload ingestion and schema checks for document, supplier, and impact payloads.
+
+## Compliance ingestion
+- Implemented certificate upload DTOs/services to normalize concentrations, persist certificates/findings transactionally, and surface data-quality issues during ingestion.
 
 ## Verification
 - Running `pnpm build`, `pnpm lint`, and `pnpm test` succeeds across the workspace (tests currently stubs).
