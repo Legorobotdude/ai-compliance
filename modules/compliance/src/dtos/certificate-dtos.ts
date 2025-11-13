@@ -21,7 +21,7 @@ export interface CertificateInput {
   thresholdPpm?: number | null;
   documentLimitSource?: Certificate['documentLimitSource'];
   sourceDocumentId?: UUID | null;
-  findings: CertificateFindingInput[];
+  findings?: CertificateFindingInput[];
 }
 
 export interface CertificateUploadRequest {
@@ -30,10 +30,10 @@ export interface CertificateUploadRequest {
 }
 
 export interface CertificateUploadIssue {
-  code: 'VALUE_MISSING' | 'UNIT_MISSING';
+  code: 'VALUE_MISSING' | 'UNIT_MISSING' | 'PARSE_FAILED' | 'CORA_AMBIGUITY';
   message: string;
   partNumber: string;
-  substanceName: string;
+  substanceName?: string;
 }
 
 export interface CertificateUploadResult {

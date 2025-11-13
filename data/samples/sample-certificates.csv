@@ -1,0 +1,7 @@
+partNumber,substance,concentration,unit,validUntil,thresholdPpm
+CU-78901,Lead,0.09,%,2025-12-31,1000
+CU-78901,Cadmium,0.001,%,2025-12-31,100
+WM-88211,Nickel Sulfate,0.05,%,2025-06-30,500
+WM-88212,Mercury,0.002,%,2025-06-30,100
+BP-44001,PFOA,0.002,%,2025-12-31,25
+BP-44002,Lead,0.08,%,2025-12-31,1000

@@ -17,7 +17,9 @@ DOCUMENT_PARSE_USER_TEMPLATE = """Document metadata:
 Certificate excerpt (truncated to {excerpt_chars} chars):
 \"\"\"{excerpt}\"\"\"
 
-Return the `certificate_v1` JSON schema with doc_ref, parts[{part_number, findings[{substance_name, concentration_value, concentration_unit, concentration_ppm, notes}]}], and ambiguities list summarising issues."""
+Return the `certificate_v1` JSON schema with doc_ref, a `parts` array of objects (each containing
+part_number and findings entries with substance_name, concentration_value, concentration_unit,
+concentration_ppm, notes), and an ambiguities list summarising issues."""
 
 
 SUPPLIER_EMAIL_SYSTEM = """You draft concise supplier outreach emails asking for RoHS/REACH updates.

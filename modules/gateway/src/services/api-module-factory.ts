@@ -21,8 +21,15 @@ export interface ApiModuleOptions {
 
 export class ApiModuleFactory {
   static create(options: ApiModuleOptions): ApiController {
+    const coraClient = new CoraClient({
+      baseUrl: options.cora.baseUrl,
+      apiKey: options.cora.apiKey,
+      timeoutMs: options.cora.timeoutMs
+    });
+    const coraService = new CoraService(coraClient);
+
     const complianceRepo = new ComplianceRepository(options.db);
-    const complianceService = new ComplianceService(complianceRepo);
+    const complianceService = new ComplianceService(complianceRepo, coraService);
     const complianceController = new ComplianceController(complianceService);
 
     const supplierRepo = new SupplierRepository(options.db);
@@ -50,12 +57,6 @@ export class ApiModuleFactory {
     // Workflow service is returned for worker wiring but not required by ApiController at the moment.
     void workflowService;
 
-    const coraClient = new CoraClient({
-      baseUrl: options.cora.baseUrl,
-      apiKey: options.cora.apiKey,
-      timeoutMs: options.cora.timeoutMs
-    });
-    const coraService = new CoraService(coraClient);
     const coraController = new CoraController(coraService);
 
     return new ApiController(

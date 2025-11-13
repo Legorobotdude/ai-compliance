@@ -1,6 +1,5 @@
 # Scalable Architecture Plan — AI-Powered Compliance Platform (“CORA” inside)
 
-
 ---
 
 ## 1) High-level System Design
@@ -15,7 +14,7 @@
 * **Risk/Impact Module**: Maintains regulation catalogs, limit sliders, impact simulations, trend caches, and the risk scoring formulas. Consumes Compliance status snapshots (via DB views + cache invalidation events) and exposes scenario diffs with supplier/assembly rollups. Generates pre-computed heatmaps for the dashboard and feeds alerting thresholds into the Jobs module.
 * **Supplier Module**: Manages suppliers, contacts, `component_suppliers`, SLA tracking, request workflows, and integrates with CORA to draft outreach. Owns `/supplier/scorecard`, calculates response KPIs, reconciles inbound responses/webhooks, and triggers escalations. Emits audit events and updates scorecards when requests close or expire; also publishes “slow responder” events for Ops Center widgets.
 * **File/Document Module**: Handles uploads (pre-signed URLs), virus scanning hooks, document metadata, storage refs (S3/MinIO), and ties files to BOMs/certificates. Provides document fetch APIs for CORA parsing, manages retention policies, and enforces tenant-level encryption keys. Coordinates with Compliance to stash parsed JSON snapshots.
-* **Jobs & Workflow Module**: Temporal/BullMQ workers living in the same repo, consuming queues for ingestion retries, supplier reminders, LLM reprocess tasks, and impact simulations. Provides an internal DSL for defining workflows so business logic stays versioned with code. Includes heartbeat monitors and dead-letter handling surfaced to the Ops Center.
+* **Jobs & Workflow Module**: Temporal workers living in the same repo, consuming queues for ingestion retries, supplier reminders, LLM reprocess tasks, and impact simulations. Provides an internal DSL for defining workflows so business logic stays versioned with code. Includes heartbeat monitors and dead-letter handling surfaced to the Ops Center.
 * **Search/RAG Module**: Manages embeddings (pgvector/Qdrant), regulation corpora ingestion, and retrieval helpers injected into CORA prompts or dashboard search. Shares the same Postgres connection to reuse tenant scoping, periodically updates embeddings, and exposes semantic search endpoints for compliance texts.
 
 **Inter-module communication:** In-process TypeScript interfaces (or gRPC-like contracts) keep boundaries explicit. Long-running/async work is handed off via Redis/Temporal queues. Shared libraries (auth, logging, tracing) live under `/libs` to avoid circular dependencies.
@@ -55,7 +54,7 @@
 * `bom_subassemblies(id, tenant_id, bom_id, assembly_id, name, parent_assembly_id null)`
 * `bom_components(id, tenant_id, bom_id, assembly_id, part_number, material, weight_g, weight_mg, normalized_weight_mg)`
 
-  * Mirrors the “Industrial Smart Hub v2” hierarchy with SUB-001/002/003 assemblies so dashboards can collapse/expand Control Unit vs Battery Pack views. 
+  * Mirrors the “Industrial Smart Hub v2” hierarchy with SUB-001/002/003 assemblies so dashboards can collapse/expand Control Unit vs Battery Pack views.
 
 **Suppliers**
 
@@ -64,7 +63,7 @@
 * `component_suppliers(id, tenant_id, part_number, supplier_id, sourcing_type)` — establishes who owns each part even when no certificate exists.
 * `supplier_requests(id, tenant_id, supplier_id, bom_id, status, sent_at, due_at, last_reminder_at, response_at)`
 
-  * Seed from uploaded suppliers file for scorecards (e.g., response days 7/15/3; languages de/zh/en) and map Control Unit/Battery Pack components to SUP-101/102/103. 
+  * Seed from uploaded suppliers file for scorecards (e.g., response days 7/15/3; languages de/zh/en) and map Control Unit/Battery Pack components to SUP-101/102/103.
 
 **Certificates & Substances**
 
@@ -99,7 +98,7 @@
 * Multipart file or JSON. Accepts CSV/JSON (and ZIP of subdocs).
 * Parses hierarchical assemblies → `bom_subassemblies` + `bom_components`, normalizes weights: `ppm = (mg/kg)*1000`, `% → ppm * 10,000`, handles missing units (null + flag).
 * Returns `{bom_id, components_count, assemblies: number, issues:[…]}`; issues include missing supplier mappings or null weights so CORA can request data.
-* Example components reflect Control Unit/Wireless Module/Battery Pack. 
+* Example components reflect Control Unit/Wireless Module/Battery Pack.
 
 **POST** `/certs/upload`
 
@@ -109,11 +108,11 @@
 
 **GET** `/merged?bom_id=…`
 
-* Returns BOM components with assembly context, supplier ownership (`component_suppliers`), and latest findings/status, e.g., CU-78901 has Lead finding 0.09% (=900 ppm). 
+* Returns BOM components with assembly context, supplier ownership (`component_suppliers`), and latest findings/status, e.g., CU-78901 has Lead finding 0.09% (=900 ppm).
 
 **GET** `/supplier/scorecard?supplier_id=…`
 
-* Returns responsiveness, last request dates, compliance rate (e.g., 0.91/0.65/0.98), plus outstanding parts mapped to the supplier that lack valid certificates so ops knows which BOM assemblies are blocked. 
+* Returns responsiveness, last request dates, compliance rate (e.g., 0.91/0.65/0.98), plus outstanding parts mapped to the supplier that lack valid certificates so ops knows which BOM assemblies are blocked.
 
 **POST** `/impact/predict`
 
@@ -156,7 +155,7 @@
 
 *Tools/Context:*
 
-* Provide few-shot examples from our XML/CSV content (no PII), e.g., Lead 0.09% on CU-78901 → 900 ppm; Nickel Sulfate 0.05% on WM-88211 → 500 ppm; PFOA 0.002% on BP-44001 → 20 ppm. 
+* Provide few-shot examples from our XML/CSV content (no PII), e.g., Lead 0.09% on CU-78901 → 900 ppm; Nickel Sulfate 0.05% on WM-88211 → 500 ppm; PFOA 0.002% on BP-44001 → 20 ppm.
 
 *Output (schema head):*
 
@@ -187,13 +186,14 @@
 > Draft a concise, professional email to **{supplier_name}** requesting updated **RoHS** and **REACH** certificates for BOM **{bom_external_id}**. Localize to **{language}** (default English) with country-appropriate salutations, and cite the nearest regulatory deadline if a certificate expires within 90 days. Include a bullet list of missing parts and documents, a secure upload link, and a clear due date based on the supplier’s **average response time** (+2 days buffer). Keep it under 180 words and avoid legal advice.
 >
 > Reasoning plan:
+>
 > - Step 1: Summarize missing findings/threshold breaches grouped by assembly.
 > - Step 2: Compute due date = `now + avg_response_days + 2`.
 > - Step 3: Draft the localized email referencing the summary and due date.
 
 *Context:*
 
-* Supplier metadata (e.g., Zentech Components (de), Jinlong Precision (zh), EverBright (en); avg response 7/15/3 days, last request dates). 
+* Supplier metadata (e.g., Zentech Components (de), Jinlong Precision (zh), EverBright (en); avg response 7/15/3 days, last request dates).
 
 ### Prompt 3 — **Risk Summarization Bot**
 
@@ -207,8 +207,8 @@
 
 *Context:*
 
-* Merged status for BOM (e.g., CU-78901 has Lead finding, WM-88211 has Nickel Sulfate finding, BP-44001 shows PFOA). 
-* Product “Industrial Smart Hub v2” BOM for part list. 
+* Merged status for BOM (e.g., CU-78901 has Lead finding, WM-88211 has Nickel Sulfate finding, BP-44001 shows PFOA).
+* Product “Industrial Smart Hub v2” BOM for part list.
 
 **RAG (bonus):**
 
@@ -242,7 +242,7 @@ else if any finding.concentration_ppm > regulation_limit_ppm(substance): OVER_LI
 else: COMPLIANT
 ```
 
-* Example inputs from REACH XML drive CU-78901/WM-88211/BP-44001 test cases; RoHS CSV thresholds override regulation defaults when present. 
+* Example inputs from REACH XML drive CU-78901/WM-88211/BP-44001 test cases; RoHS CSV thresholds override regulation defaults when present.
 
 **Impact simulator (/impact/predict):**
 
@@ -253,7 +253,7 @@ else: COMPLIANT
 **Risk score (0–100):**
 
 * `w1 * over_limit_parts + w2 * missing/expired + w3 * time_to_expiry + w4 * supplier_risk`
-* Supplier risk uses `1 - compliance_rate` and `response_avg_days` (normalize 0–1). 
+* Supplier risk uses `1 - compliance_rate` and `response_avg_days` (normalize 0–1).
 
 ---
 
@@ -307,10 +307,10 @@ else: COMPLIANT
 ## 9) Implementation Milestones (2–3 week track)
 
 1. **Scaffold & Auth** (API + Next.js, JWT, RLS)
-2. **BOM Upload & Parser** (+unit normalization, Explorer UI) 
-3. **Cert Uploads** (XML/CSV deterministic; PDF → CORA v1) 
+2. **BOM Upload & Parser** (+unit normalization, Explorer UI)
+3. **Cert Uploads** (XML/CSV deterministic; PDF → CORA v1)
 4. **Merge & Status Engine** (+risk score, dashboards)
-5. **Supplier Scorecards & Workflows** (emails, reminders) 
+5. **Supplier Scorecards & Workflows** (emails, reminders)
 6. **Impact Simulator** (PFAS & general thresholds)
 7. **Observability & Audits** (LLM logs, alerts)
 8. **RAG + Temporal (bonus)**
@@ -400,11 +400,11 @@ else: COMPLIANT
 
 ## 12) What you can test immediately with the sample data
 
-* **/bom/upload** → load “Industrial Smart Hub v2” and confirm components present. 
-* **/certs/upload** (XML) → verify findings for Lead/Nickel Sulfate/PFOA and `valid_until`. 
-* **/merged** → see statuses per part; CU-78901/WM-88211/BP-44001 should anchor your test cases. 
-* **/supplier/scorecard** → confirm responsiveness and compliance rates (7/15/3 days; 0.91/0.65/0.98). 
-* **/impact/predict** → set PFAS limit drop and watch BP-44001 behavior change in the diff (depending on your seeded limits). 
+* **/bom/upload** → load “Industrial Smart Hub v2” and confirm components present.
+* **/certs/upload** (XML) → verify findings for Lead/Nickel Sulfate/PFOA and `valid_until`.
+* **/merged** → see statuses per part; CU-78901/WM-88211/BP-44001 should anchor your test cases.
+* **/supplier/scorecard** → confirm responsiveness and compliance rates (7/15/3 days; 0.91/0.65/0.98).
+* **/impact/predict** → set PFAS limit drop and watch BP-44001 behavior change in the diff (depending on your seeded limits).
 * **Supplier mapping sanity** → ensure each part in the BOM links back to SUP-101/102/103 so CORA emails and SLA monitors know which supplier to ping when certificates are missing.
 
 ---

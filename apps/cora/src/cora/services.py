@@ -354,7 +354,9 @@ class ServiceContainer:
         self.risk_summary = risk_summary
 
 
-def convert_to_ppm(value: float, unit: str | None) -> float | None:
+def convert_to_ppm(value: float | None, unit: str | None) -> float | None:
+    if value is None:
+        return None
     if unit == "%":
         return value * 10_000
     if unit in ("ppm", "mg/kg"):

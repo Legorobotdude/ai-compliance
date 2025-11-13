@@ -91,7 +91,7 @@ const certificateFindingSchema = z
   })
   .strict();
 
-const certificateSchema = z
+const certificateCoreSchema = z
   .object({
     supplierId: uuid(),
     partNumber: nonEmpty(),
@@ -101,9 +101,19 @@ const certificateSchema = z
     thresholdPpm: z.number().nonnegative().optional().nullable(),
     documentLimitSource: z.enum(['DOC', 'REGULATION']).optional().nullable(),
     sourceDocumentId: uuid().optional().nullable(),
-    findings: z.array(certificateFindingSchema).min(1)
+    findings: z.array(certificateFindingSchema).default([])
   })
   .strict();
+
+const certificateSchema = certificateCoreSchema.superRefine((value, ctx) => {
+  if (value.findings.length === 0 && !value.sourceDocumentId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['findings'],
+      message: 'Provide findings or a sourceDocumentId for CORA parsing'
+    });
+  }
+});
 
 export const certificateUploadRequestSchema = z
   .object({
@@ -114,10 +124,10 @@ export const certificateUploadRequestSchema = z
 
 const certificateUploadIssueSchema = z
   .object({
-    code: z.enum(['VALUE_MISSING', 'UNIT_MISSING']),
+    code: z.enum(['VALUE_MISSING', 'UNIT_MISSING', 'PARSE_FAILED', 'CORA_AMBIGUITY']),
     message: nonEmpty(),
     partNumber: nonEmpty(),
-    substanceName: nonEmpty()
+    substanceName: nonEmpty().optional()
   })
   .strict();
 

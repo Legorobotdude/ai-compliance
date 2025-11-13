@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, FieldValidationInfo, PositiveInt, field_validator
+from pydantic import AliasChoices, BaseModel, Field, FieldValidationInfo, PositiveInt, field_validator
 
 
 class LlmAgent(str, Enum):
@@ -23,14 +23,16 @@ class TenantContext(BaseModel):
 
 class CertificateFinding(BaseModel):
     substance_name: str
-    concentration_value: float
+    concentration_value: float | None = None
     concentration_unit: Optional[Literal["%", "ppm", "mg/kg"]] = None
     concentration_ppm: float | None = None
     notes: str | None = None
 
     @field_validator("concentration_value")
     @classmethod
-    def validate_positive(cls, value: float) -> float:
+    def validate_positive(cls, value: float | None) -> float | None:
+        if value is None:
+            return value
         if value < 0:
             raise ValueError("concentration_value must be >= 0")
         return value
@@ -90,10 +92,32 @@ class RiskSummaryRequest(BaseModel):
 
 
 class SupplierGap(BaseModel):
-    supplier_name: str
+    supplier_name: str = Field(validation_alias=AliasChoices("supplier_name", "supplier"))
     reason: Literal["MISSING", "EXPIRED", "OVER_LIMIT"]
     part_numbers: list[str]
     eta_days: PositiveInt
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        if isinstance(value, str):
+            cleaned = value.strip().upper().replace("-", "_").replace(" ", "_")
+            mapping = {
+                "MISSING": "MISSING",
+                "SUPPLIER_MISSING": "MISSING",
+                "MISSING_CERTIFICATES": "MISSING",
+                "EXPIRED": "EXPIRED",
+                "EXPIRED_CERTIFICATES": "EXPIRED",
+                "EXPIRED_CERTIFICATE": "EXPIRED",
+                "OVER_LIMIT": "OVER_LIMIT",
+                "OVER_LIMITS": "OVER_LIMIT",
+                "OVER_LIMIT_PARTS": "OVER_LIMIT",
+                "OVER_LIMITED": "OVER_LIMIT"
+            }
+            normalized = mapping.get(cleaned)
+            if normalized:
+                return normalized
+        return value
 
 
 class RiskSummaryResponse(BaseModel):

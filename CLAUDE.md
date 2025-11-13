@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+#CRITICAL: ALWAYS REFERENCE Architecture.md
+
 ## Project Overview
 
 Certivo is an AI-powered compliance platform built as a **modular monolith**. The system manages Bill of Materials (BOM), supplier certificates, compliance status tracking, risk assessment, and AI-powered document parsing through CORA (Compliance Operations & Risk Assistant).

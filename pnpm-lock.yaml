@@ -166,6 +166,9 @@ importers:
 
   modules/compliance:
     dependencies:
+      '@certivo/cora':
+        specifier: workspace:*
+        version: link:../cora
       '@certivo/lib-db':
         specifier: workspace:*
         version: link:../../libs/db

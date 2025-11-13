@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     )
     openai_top_p: float = Field(default=1.0, ge=0.0, le=1.0)
     openai_max_output_tokens: int = Field(default=1200, ge=256, le=4096)
-    openai_request_timeout_seconds: float = Field(default=60.0, ge=5.0, le=120.0)
+    openai_request_timeout_seconds: float = Field(default=300.0, ge=5.0, le=1000.0)
     openai_max_retries: int = Field(default=3, ge=0, le=6)
 
     document_text_char_budget: int = Field(default=20_000, ge=2_000, le=80_000)

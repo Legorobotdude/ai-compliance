@@ -1,3 +1,4 @@
+import type { AiParseDocumentResponse, CoraService } from '@certivo/cora';
 import type { TenantID, UUID } from '@certivo/lib-db';
 import type {
   BomAssemblyInput,
@@ -21,7 +22,7 @@ import { BomIngestionError } from '../errors.js';
 import { extractAssembliesFromRequest } from './bom-ingestion-parser.js';
 
 export class ComplianceService {
-  constructor(private readonly repo: ComplianceRepository) {}
+  constructor(private readonly repo: ComplianceRepository, private readonly cora?: CoraService) {}
 
   async ingestBom(request: BomUploadRequest): Promise<BomUploadResponse> {
     const issues: BomUploadResponse['issues'] = [];
@@ -68,7 +69,8 @@ export class ComplianceService {
 
     for (const certificateInput of request.certificates) {
       const certificateRecord = this.toPersistableCertificate(request.tenantId, certificateInput);
-      const normalizedFindings = certificateInput.findings.map((finding) =>
+      const resolvedFindings = await this.resolveCertificateFindings(request.tenantId, certificateInput, issues);
+      const normalizedFindings = resolvedFindings.map((finding) =>
         this.normalizeFinding(certificateInput, finding, issues)
       );
       const dataQualityFlags = normalizedFindings.filter(
@@ -145,6 +147,87 @@ export class ComplianceService {
     }
 
     return persistable;
+  }
+
+  private async resolveCertificateFindings(
+    tenantId: TenantID,
+    certificate: CertificateInput,
+    issues: CertificateUploadIssue[]
+  ): Promise<CertificateFindingInput[]> {
+    const provided = certificate.findings ?? [];
+    if (provided.length > 0) {
+      return provided;
+    }
+    if (!this.cora || !certificate.sourceDocumentId) {
+      return [];
+    }
+    try {
+      const response = await this.cora.parseDocument({
+        tenantId,
+        documentId: certificate.sourceDocumentId,
+        schema: 'certificate_v1'
+      });
+      this.recordCoraAmbiguities(response, certificate, issues);
+      return this.mapCoraFindings(response, certificate, issues);
+    } catch (error) {
+      issues.push({
+        code: 'PARSE_FAILED',
+        message: `CORA parsing failed for part ${certificate.partNumber}: ${(error as Error).message}`,
+        partNumber: certificate.partNumber
+      });
+      return [];
+    }
+  }
+
+  private recordCoraAmbiguities(
+    response: AiParseDocumentResponse,
+    certificate: CertificateInput,
+    issues: CertificateUploadIssue[]
+  ) {
+    if (!response.ambiguities?.length) {
+      return;
+    }
+    for (const note of response.ambiguities) {
+      issues.push({
+        code: 'CORA_AMBIGUITY',
+        message: note,
+        partNumber: certificate.partNumber
+      });
+    }
+  }
+
+  private mapCoraFindings(
+    response: AiParseDocumentResponse,
+    certificate: CertificateInput,
+    issues: CertificateUploadIssue[]
+  ): CertificateFindingInput[] {
+    if (!response.parts || response.parts.length === 0) {
+      issues.push({
+        code: 'PARSE_FAILED',
+        message: `CORA returned no parts for document ${certificate.sourceDocumentId ?? ''}`,
+        partNumber: certificate.partNumber
+      });
+      return [];
+    }
+
+    const normalizedTarget = certificate.partNumber.trim().toUpperCase();
+    let selected = response.parts.find((part) => part.partNumber.trim().toUpperCase() === normalizedTarget);
+
+    if (!selected) {
+      selected = response.parts[0]!;
+      issues.push({
+        code: 'PARSE_FAILED',
+        message: `CORA response lacked part ${certificate.partNumber}; using part ${selected.partNumber}`,
+        partNumber: certificate.partNumber
+      });
+    }
+
+    return selected.findings.map((finding) => ({
+      substanceName: finding.substanceName,
+      concentrationValue: finding.concentrationValue ?? undefined,
+      concentrationUnit: finding.concentrationUnit ?? undefined,
+      concentrationRaw: finding.notes ?? undefined
+    }));
   }
 
   private identifySupplierGaps(partNumbers: string[], supplierMap: Map<string, UUID[]>): BomUploadResponse['issues'] {

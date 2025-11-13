@@ -24,7 +24,9 @@ export class CoraClient {
   constructor(options: CoraClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.apiKey = options.apiKey;
-    this.timeoutMs = options.timeoutMs ?? 10_000;
+    const envTimeout = process.env.CORA_API_TIMEOUT_MS ? Number(process.env.CORA_API_TIMEOUT_MS) : undefined;
+    const normalizedTimeout = Number.isFinite(envTimeout) && envTimeout && envTimeout > 0 ? envTimeout : undefined;
+    this.timeoutMs = options.timeoutMs ?? normalizedTimeout ?? 10_000;
   }
 
   async post<TResponse>(path: string, payload: unknown, tenantId: string): Promise<TResponse> {

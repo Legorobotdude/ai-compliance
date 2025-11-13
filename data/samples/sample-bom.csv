@@ -1,0 +1,7 @@
+assemblyId,parentAssemblyId,name,partNumber,material,weightG
+CTRL-UNIT,,Control Unit,CU-78901,PCB Assembly,45.2
+CTRL-UNIT,,Control Unit,CU-78902,Aluminum Housing,120.5
+WM-UNIT,,Wireless Module,WM-88211,RF Transceiver,12.3
+WM-UNIT,,Wireless Module,WM-88212,Antenna,5.1
+BP-UNIT,,Battery Pack,BP-44001,Li-ion Cell,85.7
+BP-UNIT,,Battery Pack,BP-44002,BMS Circuit,18.9
