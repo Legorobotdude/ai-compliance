@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@certivo/dashboard": "workspace:*",
+    "@certivo/cora": "workspace:*",
     "@certivo/compliance": "workspace:*",
     "@certivo/file-document": "workspace:*",
     "@certivo/jobs-workflows": "workspace:*",

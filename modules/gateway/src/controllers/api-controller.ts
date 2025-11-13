@@ -1,4 +1,8 @@
-import type { BomUploadRequest, CertificateUploadRequest, MergedViewRequest } from '@certivo/compliance';
+import type {
+  BomUploadRequest,
+  CertificateUploadRequest,
+  MergedViewRequest
+} from '@certivo/compliance';
 import { ComplianceController } from '@certivo/compliance';
 import type { ImpactPredictRequest } from '@certivo/risk-impact';
 import { RiskImpactController } from '@certivo/risk-impact';
@@ -10,6 +14,12 @@ import type { SearchQuery } from '@certivo/search-rag';
 import { SearchController } from '@certivo/search-rag';
 import type { DashboardSnapshotDto } from '@certivo/dashboard';
 import { DashboardController } from '@certivo/dashboard';
+import type {
+  AiParseDocumentRequest,
+  AiSupplierEmailRequest,
+  AiRiskSummaryRequest
+} from '@certivo/cora';
+import { CoraController } from '@certivo/cora';
 import type { UUID } from '@certivo/lib-db';
 import type { HttpRequest, HttpResponse } from '../types/http';
 
@@ -20,7 +30,8 @@ export class ApiController {
     private readonly risk: RiskImpactController,
     private readonly documents: DocumentController,
     private readonly search: SearchController,
-    private readonly dashboard: DashboardController
+    private readonly dashboard: DashboardController,
+    private readonly cora: CoraController
   ) {}
 
   async postBomUpload(req: HttpRequest<BomUploadRequest>, res: HttpResponse) {
@@ -88,5 +99,20 @@ export class ApiController {
       bomId: req.query.bomId ? (req.query.bomId as UUID) : undefined
     });
     res.status(200).json(snapshot);
+  }
+
+  async postAiParseDocument(req: HttpRequest<AiParseDocumentRequest>, res: HttpResponse) {
+    const result = await this.cora.parseDocument(req.body);
+    res.status(200).json(result);
+  }
+
+  async postAiSupplierEmail(req: HttpRequest<AiSupplierEmailRequest>, res: HttpResponse) {
+    const result = await this.cora.supplierEmail(req.body);
+    res.status(200).json(result);
+  }
+
+  async postAiRiskSummary(req: HttpRequest<AiRiskSummaryRequest>, res: HttpResponse) {
+    const result = await this.cora.riskSummary(req.body);
+    res.status(200).json(result);
   }
 }

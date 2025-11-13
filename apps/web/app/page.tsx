@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { BomExplorer } from "@/components/dashboard/bom-explorer";
 import { SupplierScorecards } from "@/components/dashboard/supplier-scorecards";
 import { RiskVisualization } from "@/components/dashboard/risk-visualization";
@@ -23,7 +25,15 @@ export default async function DashboardPage() {
             heatmaps, and CORA observability.
           </p>
         </div>
-        <RoleSwitcher />
+        <div className="flex items-center gap-3">
+          <Link
+            href="/lab"
+            className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
+          >
+            Open testing lab
+          </Link>
+          <RoleSwitcher />
+        </div>
       </header>
 
       <BomExplorer rows={snapshot.bom.items} />

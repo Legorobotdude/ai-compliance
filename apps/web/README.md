@@ -60,3 +60,8 @@ Both variables must be present for dev, lint, and build steps because `/dashboar
 - Provide shared UI components (virtualized TanStack Table, Recharts-based viz, localized CORA email previews).
 - Integrate with role-aware UI gates (viewer/analyst/admin) plus supplier outreach i18n.
 - Handle client telemetry hooks, feature flags, and API wiring in follow-on stories.
+
+## Testing lab
+
+- Open `/lab` in the running web app to exercise the compliance ingestion (Architecture.md §3) and CORA AI (Architecture.md §4) flows without leaving the browser.
+- The page proxies to the Express gateway, so the existing `CERTIVO_API_URL`/`CERTIVO_API_TOKEN` env vars are reused—no additional secrets required.

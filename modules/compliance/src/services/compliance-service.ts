@@ -1,5 +1,6 @@
 import type { TenantID, UUID } from '@certivo/lib-db';
 import type {
+  BomAssemblyInput,
   BomUploadRequest,
   BomUploadResponse,
   MergedViewRequest,
@@ -16,61 +17,34 @@ import type {
   PersistableCertificateFinding
 } from '../dtos/certificate-dtos';
 import { ComplianceRepository } from '../repositories/compliance-repository';
+import { BomIngestionError } from '../errors.js';
+import { extractAssembliesFromRequest } from './bom-ingestion-parser.js';
 
 export class ComplianceService {
   constructor(private readonly repo: ComplianceRepository) {}
 
   async ingestBom(request: BomUploadRequest): Promise<BomUploadResponse> {
     const issues: BomUploadResponse['issues'] = [];
-    const componentsCount = request.assemblies.reduce((acc, assembly) => acc + assembly.components.length, 0);
+    const parsed = await extractAssembliesFromRequest(request.assemblies, request.document);
+    issues.push(...parsed.issues);
 
-    const persistable: PersistableBom = {
-      bom: {
-        tenantId: request.tenantId,
-        productId: request.productId,
-        uploadedBy: request.uploadedBy,
-        sourceDocId: request.sourceDocumentId ?? null
-      },
-      assemblies: [],
-      components: []
-    };
-
-    for (const assembly of request.assemblies) {
-      persistable.assemblies.push({
-        tenantId: request.tenantId,
-        bomId: null,
-        assemblyId: assembly.assemblyId,
-        name: assembly.name,
-        parentAssemblyId: assembly.parentAssemblyId ?? null
-      });
-      for (const component of assembly.components) {
-        const normalizedWeightMg = this.normalizeWeight(component.weightMg, component.weightG);
-        if (normalizedWeightMg == null) {
-          issues.push({
-            code: 'WEIGHT_MISSING',
-            message: 'Component is missing weight data',
-            partNumber: component.partNumber
-          });
-        }
-        persistable.components.push({
-          tenantId: request.tenantId,
-          bomId: null,
-          assemblyId: assembly.assemblyId,
-          partNumber: component.partNumber,
-          material: component.material ?? null,
-          weightG: component.weightG ?? null,
-          weightMg: component.weightMg ?? null,
-          normalizedWeightMg
-        });
-      }
+    if (parsed.assemblies.length === 0) {
+      throw new BomIngestionError('BOM upload did not contain any assemblies after parsing');
     }
 
+    const persistable = this.buildPersistableBom(request, parsed.assemblies, issues);
+    const partNumbers = Array.from(new Set(persistable.components.map((component) => component.partNumber)));
+    const supplierMap = await this.repo.findComponentSuppliers(request.tenantId, partNumbers);
+    const supplierIssues = this.identifySupplierGaps(partNumbers, supplierMap);
+    issues.push(...supplierIssues);
+
     const bomId = await this.repo.createBom(persistable);
+    await this.persistSupplierIssues(request.tenantId, bomId, supplierIssues);
 
     return {
       bomId,
-      assemblies: request.assemblies.length,
-      components: componentsCount,
+      assemblies: persistable.assemblies.length,
+      components: persistable.components.length,
       issues
     };
   }
@@ -122,6 +96,88 @@ export class ComplianceService {
     }
 
     return { items, issues };
+  }
+
+  private buildPersistableBom(
+    request: BomUploadRequest,
+    assemblies: BomAssemblyInput[],
+    issues: BomUploadResponse['issues']
+  ): PersistableBom {
+    const persistable: PersistableBom = {
+      bom: {
+        tenantId: request.tenantId,
+        productId: request.productId,
+        uploadedBy: request.uploadedBy,
+        sourceDocId: request.sourceDocumentId ?? null
+      },
+      assemblies: [],
+      components: []
+    };
+
+    for (const assembly of assemblies) {
+      persistable.assemblies.push({
+        tenantId: request.tenantId,
+        bomId: null,
+        assemblyId: assembly.assemblyId,
+        name: assembly.name,
+        parentAssemblyId: assembly.parentAssemblyId ?? null
+      });
+      for (const component of assembly.components) {
+        const normalizedWeightMg = this.normalizeWeight(component.weightMg, component.weightG);
+        if (normalizedWeightMg == null) {
+          issues.push({
+            code: 'WEIGHT_MISSING',
+            message: 'Component is missing weight data',
+            partNumber: component.partNumber
+          });
+        }
+        persistable.components.push({
+          tenantId: request.tenantId,
+          bomId: null,
+          assemblyId: assembly.assemblyId,
+          partNumber: component.partNumber,
+          material: component.material ?? null,
+          weightG: component.weightG ?? null,
+          weightMg: component.weightMg ?? null,
+          normalizedWeightMg
+        });
+      }
+    }
+
+    return persistable;
+  }
+
+  private identifySupplierGaps(partNumbers: string[], supplierMap: Map<string, UUID[]>): BomUploadResponse['issues'] {
+    const issues: BomUploadResponse['issues'] = [];
+    for (const partNumber of partNumbers) {
+      if (!supplierMap.has(partNumber)) {
+        issues.push({
+          code: 'SUPPLIER_MISSING',
+          message: `No supplier mapping exists for part ${partNumber}`,
+          partNumber
+        });
+      }
+    }
+    return issues;
+  }
+
+  private async persistSupplierIssues(
+    tenantId: TenantID,
+    bomId: UUID,
+    issues: BomUploadResponse['issues']
+  ): Promise<void> {
+    const supplierIssues = issues.filter((issue) => issue.code === 'SUPPLIER_MISSING' && issue.partNumber);
+    await Promise.all(
+      supplierIssues.map((issue) =>
+        this.repo.recordIngestionIssue({
+          tenantId,
+          bomId,
+          partNumber: issue.partNumber,
+          code: 'SUPPLIER_MISSING',
+          message: issue.message
+        })
+      )
+    );
   }
 
   private toPersistableCertificate(tenantId: TenantID, certificate: CertificateInput): PersistableCertificate {

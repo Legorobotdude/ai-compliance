@@ -11,6 +11,7 @@
     { "path": "modules/supplier" },
     { "path": "modules/file-document" },
     { "path": "modules/jobs-workflows" },
+    { "path": "modules/cora" },
     { "path": "modules/search-rag" },
     { "path": "libs/auth" },
     { "path": "libs/config" },

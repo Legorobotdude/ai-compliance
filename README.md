@@ -29,18 +29,7 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
-### 3. Configure and start the API
-
-```bash
-export DATABASE_URL="postgres://certivo:certivo@localhost:5432/certivo"
-export AUTH_JWT_SECRET="dev-secret"
-export AUTH_ISSUER="https://auth.dev.certivo"
-export AUTH_AUDIENCE="certivo-api"
-
-pnpm --filter @certivo/api dev
-```
-
-### 4. Generate a JWT token for the web app
+### 3. Generate a JWT token for the web app
 
 ```bash
 node infra/docker/generate-dev-token.mjs
@@ -48,19 +37,49 @@ node infra/docker/generate-dev-token.mjs
 
 Copy the generated token.
 
-### 5. Start the web app
+### 4. Create a `.dev.env`
+
+Use the sample template to capture all required URLs/tokens:
 
 ```bash
-export CERTIVO_API_URL="http://localhost:4000"
-export CERTIVO_API_TOKEN="<token-from-step-4>"
-
-pnpm --filter @certivo/web dev
+cp .dev.env.example .dev.env
 ```
+
+Then edit `.dev.env` and fill in:
+
+- `CERTIVO_API_TOKEN` — token from step 3
+- `CORA_OPENAI_API_KEY` — your OpenAI key
+- (Optional) override any API/CORA URLs or database settings
+
+### 5. Start all services (API, web, CORA)
+
+```bash
+pnpm dev
+```
+
+The script loads `.dev.env`, exports the required URLs/secrets, then launches:
+
+- Express API (`@certivo/api`)
+- Next.js dashboard (`@certivo/web`)
+- CORA FastAPI sidecar (`apps/cora`)
 
 For detailed setup instructions, see:
 - `apps/api/README.md` - API server configuration
 - `apps/web/README.md` - Web app configuration
 - `infra/docker/README.md` - Docker setup and JWT token generation
+
+### Optional: run the CLI lab smoke test
+
+Exercise the same compliance + CORA flows that power the `/lab` page (Architecture.md §§3–4) straight from the terminal:
+
+```bash
+export CERTIVO_API_URL="http://localhost:4000"
+export CERTIVO_API_TOKEN="<token-from-step-4>"
+
+pnpm lab:test
+```
+
+This script uploads the sample BOM, ingests certificates, and hits `/ai/parse-document`, `/ai/supplier-email`, and `/ai/risk-summary` through the Express gateway so you can validate the end-to-end path without opening the UI.
 
 ## Next steps
 

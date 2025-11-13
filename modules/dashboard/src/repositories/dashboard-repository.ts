@@ -9,6 +9,7 @@ import type {
 
 type BomRecord = {
   id: UUID;
+  productId: UUID;
   bomExternalId: string;
   uploadedAt: string;
   productName: string;
@@ -96,6 +97,7 @@ export class DashboardRepository {
     const rows = await this.db.query<BomRecord>({
       text: `
         select b.id,
+               b.product_id as "productId",
                b.bom_external_id as "bomExternalId",
                b.uploaded_at as "uploadedAt",
                p.product_name as "productName"
@@ -114,6 +116,7 @@ export class DashboardRepository {
     const rows = await this.db.query<BomRecord>({
       text: `
         select b.id,
+               b.product_id as "productId",
                b.bom_external_id as "bomExternalId",
                b.uploaded_at as "uploadedAt",
                p.product_name as "productName"

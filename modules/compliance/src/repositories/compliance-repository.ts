@@ -66,6 +66,27 @@ export class ComplianceRepository {
     });
   }
 
+  async findComponentSuppliers(tenantId: TenantID, partNumbers: string[]): Promise<Map<string, UUID[]>> {
+    if (partNumbers.length === 0) {
+      return new Map();
+    }
+    const unique = Array.from(new Set(partNumbers));
+    const rows = await this.db.query<{ partNumber: string; supplierId: UUID }>({
+      text: `select part_number as "partNumber", supplier_id as "supplierId"
+             from component_suppliers
+             where tenant_id = $1
+               and part_number = any($2::text[])`,
+      values: [tenantId, unique]
+    });
+    const map = new Map<string, UUID[]>();
+    for (const row of rows) {
+      const current = map.get(row.partNumber) ?? [];
+      current.push(row.supplierId);
+      map.set(row.partNumber, current);
+    }
+    return map;
+  }
+
   async recordIngestionIssue(issue: IngestionIssueInput): Promise<void> {
     await this.db.query({
       text: `insert into ingestion_issues (tenant_id, bom_id, part_number, code, message)

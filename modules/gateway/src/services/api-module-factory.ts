@@ -6,11 +6,17 @@ import { DocumentController, DocumentRepository, DocumentService } from '@certiv
 import { SearchController, SearchRepository, SearchService } from '@certivo/search-rag';
 import { WorkflowRepository, WorkflowService, type WorkflowClient } from '@certivo/jobs-workflows';
 import { DashboardController, DashboardRepository, DashboardService } from '@certivo/dashboard';
+import { CoraClient, CoraController, CoraService } from '@certivo/cora';
 import { ApiController } from '../controllers/api-controller.js';
 
 export interface ApiModuleOptions {
   db: DatabaseClient;
   workflowClient: WorkflowClient;
+  cora: {
+    baseUrl: string;
+    apiKey?: string;
+    timeoutMs?: number;
+  };
 }
 
 export class ApiModuleFactory {
@@ -44,13 +50,22 @@ export class ApiModuleFactory {
     // Workflow service is returned for worker wiring but not required by ApiController at the moment.
     void workflowService;
 
+    const coraClient = new CoraClient({
+      baseUrl: options.cora.baseUrl,
+      apiKey: options.cora.apiKey,
+      timeoutMs: options.cora.timeoutMs
+    });
+    const coraService = new CoraService(coraClient);
+    const coraController = new CoraController(coraService);
+
     return new ApiController(
       complianceController,
       supplierController,
       riskController,
       docController,
       searchController,
-      dashboardController
+      dashboardController,
+      coraController
     );
   }
 }

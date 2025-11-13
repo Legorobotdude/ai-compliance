@@ -106,6 +106,7 @@ export class DashboardService {
       tenantId,
       bom: {
         id: bomId,
+        productId: bomMeta.productId,
         externalId: bomMeta.bomExternalId,
         productName: bomMeta.productName,
         uploadedAt: bomMeta.uploadedAt,

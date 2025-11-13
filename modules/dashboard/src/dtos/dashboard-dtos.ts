@@ -5,6 +5,7 @@ export interface DashboardSnapshotDto {
   tenantId: TenantID;
   bom: {
     id: UUID;
+    productId: UUID;
     externalId: string;
     productName: string;
     uploadedAt: string;

@@ -4,11 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "dev": "bash ./scripts/dev.sh",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "db:migrate": "pnpm --filter @certivo/lib-db migrate",
-    "db:seed": "pnpm --filter @certivo/lib-db seed"
+    "db:seed": "pnpm --filter @certivo/lib-db seed",
+    "lab:test": "node scripts/lab-smoke.mjs"
   },
   "keywords": [],
   "author": "",

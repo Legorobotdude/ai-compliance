@@ -1,2 +1,5 @@
-def main() -> None:
-    print("Hello from cora!")
+"""CORA FastAPI sidecar entrypoint."""
+
+from .app import create_app
+
+__all__ = ["create_app"]

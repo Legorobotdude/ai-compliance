@@ -7,6 +7,9 @@ import {
   ApiModuleFactory,
   type HttpRequest,
   type HttpResponse,
+  aiParseDocumentSchema,
+  aiRiskSummarySchema,
+  aiSupplierEmailSchema,
   bomUploadSchema,
   certificateUploadSchema,
   documentUploadSchema,
@@ -20,6 +23,7 @@ import type { BomUploadRequest, CertificateUploadRequest } from '@certivo/compli
 import type { UploadRequest } from '@certivo/file-document';
 import type { ImpactPredictRequest } from '@certivo/risk-impact';
 import type { SupplierRequestInput } from '@certivo/supplier';
+import type { AiParseDocumentRequest, AiRiskSummaryRequest, AiSupplierEmailRequest } from '@certivo/cora';
 import type { WorkflowClient, IngestionRetryTrigger, SupplierWorkflowTrigger } from '@certivo/jobs-workflows';
 import { createPgDatabaseClient, runWithTenantContext, type DatabaseClient } from '@certivo/lib-db';
 import { createLogger, createRequestLogger, type Logger } from '@certivo/lib-logging';
@@ -40,6 +44,9 @@ const AUTH_JWT_SECRET = process.env.AUTH_JWT_SECRET;
 const AUTH_TENANT_CLAIM = process.env.AUTH_TENANT_CLAIM;
 const AUTH_ROLES_CLAIM = process.env.AUTH_ROLES_CLAIM;
 const AUTH_EMAIL_CLAIM = process.env.AUTH_EMAIL_CLAIM;
+const CORA_API_URL = process.env.CORA_API_URL ?? 'http://localhost:8082';
+const CORA_API_KEY = process.env.CORA_API_KEY;
+const CORA_API_TIMEOUT_MS = process.env.CORA_API_TIMEOUT_MS ? Number(process.env.CORA_API_TIMEOUT_MS) : undefined;
 type MetricLabel = 'method' | 'route' | 'status';
 
 class NoopWorkflowClient implements WorkflowClient {
@@ -57,7 +64,20 @@ export async function startApiServer(): Promise<void> {
   const logger = createLogger({ name: 'certivo-api' });
   const metrics = createApiMetrics();
   const workflowClient = new NoopWorkflowClient();
-  const apiController = ApiModuleFactory.create({ db, workflowClient });
+  if (!CORA_API_URL) {
+    logger.error('CORA_API_URL must be set to reach the AI sidecar.');
+    process.exit(1);
+  }
+
+  const apiController = ApiModuleFactory.create({
+    db,
+    workflowClient,
+    cora: {
+      baseUrl: CORA_API_URL,
+      apiKey: CORA_API_KEY,
+      timeoutMs: CORA_API_TIMEOUT_MS
+    }
+  });
   if (!AUTH_JWKS_URL && !AUTH_JWT_SECRET) {
     logger.error(
       'Set AUTH_JWKS_URL (recommended) or AUTH_JWT_SECRET so the API can verify JWTs before starting the server.'
@@ -188,6 +208,39 @@ function buildApp(options: BuildAppOptions): Express {
       validateWithSchema(uuidSchema(), req.params.documentId);
       const httpReq = buildHttpRequest<unknown, { documentId: string }>(req);
       await controller.getDocument(httpReq, createHttpResponse(res));
+    })
+  );
+
+  app.post(
+    '/ai/parse-document',
+    route('POST /ai/parse-document', async (req, res) => {
+      const httpReq = buildHttpRequest<AiParseDocumentRequest>(req, {
+        bodyOverrides: { tenantId: req.tenantId }
+      });
+      httpReq.body = validateWithSchema(aiParseDocumentSchema, httpReq.body);
+      await controller.postAiParseDocument(httpReq, createHttpResponse(res));
+    })
+  );
+
+  app.post(
+    '/ai/supplier-email',
+    route('POST /ai/supplier-email', async (req, res) => {
+      const httpReq = buildHttpRequest<AiSupplierEmailRequest>(req, {
+        bodyOverrides: { tenantId: req.tenantId }
+      });
+      httpReq.body = validateWithSchema(aiSupplierEmailSchema, httpReq.body);
+      await controller.postAiSupplierEmail(httpReq, createHttpResponse(res));
+    })
+  );
+
+  app.post(
+    '/ai/risk-summary',
+    route('POST /ai/risk-summary', async (req, res) => {
+      const httpReq = buildHttpRequest<AiRiskSummaryRequest>(req, {
+        bodyOverrides: { tenantId: req.tenantId }
+      });
+      httpReq.body = validateWithSchema(aiRiskSummarySchema, httpReq.body);
+      await controller.postAiRiskSummary(httpReq, createHttpResponse(res));
     })
   );
 

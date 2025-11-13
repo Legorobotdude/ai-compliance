@@ -10,9 +10,32 @@ const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const sampleDir = path.join(repoRoot, 'Sample Data');
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://certivo:certivo@localhost:5432/certivo';
 
+/**
+ * Generate a deterministic UUID v4 that is RFC 4122 compliant.
+ * Uses SHA-1 hash of input and sets the correct version and variant bits.
+ */
 function deterministicUuid(input) {
   const hash = crypto.createHash('sha1').update(input).digest('hex');
-  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
+
+  // Extract UUID components from hash
+  const timeLow = hash.slice(0, 8);
+  const timeMid = hash.slice(8, 12);
+  let timeHiAndVersion = hash.slice(12, 16);
+  let clockSeqAndReserved = hash.slice(16, 20);
+  const node = hash.slice(20, 32);
+
+  // Set version to 4 (UUID v4) - bits 12-15 of time_hi_and_version
+  // Format: 0100xxxx where x are the random bits from the hash
+  const versionNibble = parseInt(timeHiAndVersion[0], 16);
+  timeHiAndVersion = '4' + (versionNibble & 0x0f).toString(16) + timeHiAndVersion.slice(2);
+
+  // Set variant to RFC 4122 (10xx) - bits 6-7 of clock_seq_hi_and_reserved
+  // Format: 10xxxxxx where x are the random bits from the hash
+  const variantByte = parseInt(clockSeqAndReserved.slice(0, 2), 16);
+  const rfc4122Variant = (variantByte & 0x3f) | 0x80; // Set bits to 10xxxxxx
+  clockSeqAndReserved = rfc4122Variant.toString(16).padStart(2, '0') + clockSeqAndReserved.slice(2);
+
+  return `${timeLow}-${timeMid}-${timeHiAndVersion}-${clockSeqAndReserved}-${node}`;
 }
 
 function toNumber(value) {
@@ -125,7 +148,8 @@ async function upsertUser(client, tenantId, userId) {
   await client.query(
     `insert into users (id, tenant_id, email, role, oidc_sub)
      values ($1, $2, $3, 'ADMIN', $4)
-     on conflict (id) do update set email = excluded.email, role = excluded.role, oidc_sub = excluded.oidc_sub`,
+     on conflict (tenant_id, email) do update
+       set id = excluded.id, role = excluded.role, oidc_sub = excluded.oidc_sub`,
     [userId, tenantId, email, oidcSub]
   );
   return userId;
@@ -564,7 +588,8 @@ async function upsertRegulations(client) {
     await client.query(
       `insert into regulations (id, code, name, region, version, effective_date)
        values ($1,$2,$3,$4,$5,$6)
-       on conflict (id) do update set name = excluded.name, version = excluded.version, effective_date = excluded.effective_date`,
+       on conflict (code, version) do update
+         set id = excluded.id, name = excluded.name, region = excluded.region, effective_date = excluded.effective_date`,
       [reg.id, reg.code, reg.name, reg.region, reg.version, reg.effectiveDate]
     );
     for (const limit of reg.limits) {

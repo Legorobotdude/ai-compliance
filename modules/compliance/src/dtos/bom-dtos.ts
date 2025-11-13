@@ -13,12 +13,22 @@ export interface BomAssemblyInput {
   components: Array<Pick<BomComponent, 'partNumber' | 'material' | 'weightG' | 'weightMg'>>;
 }
 
+export type BomUploadEncoding = 'base64' | 'utf8';
+
+export interface BomUploadDocument {
+  filename: string;
+  mimeType: string;
+  encoding?: BomUploadEncoding;
+  content: string;
+}
+
 export interface BomUploadRequest {
   tenantId: TenantID;
   productId: UUID;
   uploadedBy: UUID;
   sourceDocumentId?: UUID | null;
-  assemblies: BomAssemblyInput[];
+  assemblies?: BomAssemblyInput[];
+  document?: BomUploadDocument;
 }
 
 export interface BomUploadResponse {
