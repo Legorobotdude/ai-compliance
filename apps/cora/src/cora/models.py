@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import AliasChoices, AnyHttpUrl, BaseModel, Field, FieldValidationInfo, PositiveInt, field_validator
+from pydantic import AliasChoices, AnyUrl, BaseModel, Field, FieldValidationInfo, PositiveInt, field_validator
 
 
 class LlmAgent(str, Enum):
@@ -52,7 +52,16 @@ class DocumentParsePayload(BaseModel):
 class DocumentParseRequest(BaseModel):
     document_id: UUID
     schema: Literal["certificate_v1"] = "certificate_v1"
-    download_url: AnyHttpUrl | None = None
+    download_url: AnyUrl | None = None
+
+    @field_validator("download_url")
+    @classmethod
+    def ensure_supported_scheme(cls, value: AnyUrl | None) -> AnyUrl | None:
+        if value is None:
+            return value
+        if value.scheme not in {"http", "https", "s3", "file"}:
+            raise ValueError("URL scheme should be http, https, s3, or file")
+        return value
 
 
 class DocumentParseResponse(DocumentParsePayload):
@@ -113,11 +122,23 @@ class SupplierGap(BaseModel):
                 "OVER_LIMIT": "OVER_LIMIT",
                 "OVER_LIMITS": "OVER_LIMIT",
                 "OVER_LIMIT_PARTS": "OVER_LIMIT",
-                "OVER_LIMITED": "OVER_LIMIT"
+                "OVER_LIMITED": "OVER_LIMIT",
+                "OVERLIMIT": "OVER_LIMIT"
             }
             normalized = mapping.get(cleaned)
             if normalized:
                 return normalized
+            keywords = ("MISSING", "EXPIRED", "OVER_LIMIT")
+            matches: list[tuple[int, str]] = []
+            for keyword in keywords:
+                try:
+                    idx = cleaned.index(keyword)
+                except ValueError:
+                    continue
+                matches.append((idx, keyword))
+            if matches:
+                matches.sort(key=lambda item: item[0])
+                return matches[0][1]
         return value
 
 

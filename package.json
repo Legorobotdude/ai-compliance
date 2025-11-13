@@ -10,7 +10,8 @@
     "test": "pnpm -r test",
     "db:migrate": "pnpm --filter @certivo/lib-db migrate",
     "db:seed": "pnpm --filter @certivo/lib-db seed",
-    "lab:test": "node scripts/lab-smoke.mjs"
+    "lab:test": "node scripts/lab-smoke.mjs",
+    "risk:test": "node scripts/risk-impact-smoke.mjs"
   },
   "keywords": [],
   "author": "",
@@ -19,9 +20,11 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.6",
     "@typescript-eslint/eslint-plugin": "^8.46.4",
     "@typescript-eslint/parser": "^8.46.4",
     "eslint": "^9.39.1",
+    "pg": "^8.16.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.4"
   }

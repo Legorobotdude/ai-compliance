@@ -1,5 +1,9 @@
 import type { ComplianceStatusRow, TenantID, UUID } from '@certivo/lib-db';
-import type { ImpactPredictResponse } from '@certivo/risk-impact';
+import type {
+  ImpactPredictResponse,
+  ImpactScenarioRecord,
+  RiskDataFreshness
+} from '@certivo/risk-impact';
 
 export interface DashboardSnapshotDto {
   tenantId: TenantID;
@@ -15,6 +19,8 @@ export interface DashboardSnapshotDto {
   suppliers: SupplierScorecardSnapshot[];
   risk: RiskSummaryDto;
   impact: ImpactPredictResponse;
+  impactHistory: ImpactScenarioRecord[];
+  riskDataFreshness: RiskDataFreshness;
   auditLogs: AuditLogEntryDto[];
   ingestionIssues: OpsIssueDto[];
   slaLeaderboard: SlaLeaderboardEntryDto[];

@@ -8,17 +8,27 @@ import { SectionCard } from "@/components/ui/section-card";
 import { statusClass } from "@/lib/status";
 
 type ImpactScenario = DashboardSnapshot["impact"];
+type ImpactHistory = DashboardSnapshot["impactHistory"];
+type RiskDataFreshness = DashboardSnapshot["riskDataFreshness"];
 
 type ImpactSimulatorProps = {
   bomId: string;
   regulationCode: string;
   initialScenario: ImpactScenario;
+  history: ImpactHistory;
+  freshness: RiskDataFreshness;
 };
 
 const SLIDER_MIN = 25;
 const SLIDER_MAX = 1000;
 
-export function ImpactSimulator({ bomId, regulationCode, initialScenario }: ImpactSimulatorProps) {
+export function ImpactSimulator({
+  bomId,
+  regulationCode,
+  initialScenario,
+  history,
+  freshness
+}: ImpactSimulatorProps) {
   const [scenario, setScenario] = useState<ImpactScenario>(initialScenario);
   const [limit, setLimit] = useState(initialScenario.newLimitPpm);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +59,7 @@ export function ImpactSimulator({ bomId, regulationCode, initialScenario }: Impa
             body: JSON.stringify({
               regulationCode,
               newLimitPpm: limit,
+              limitVector: [{ substance: regulationCode, limitPpm: limit }],
               bomId
             }),
             signal: controller.signal
@@ -76,6 +87,7 @@ export function ImpactSimulator({ bomId, regulationCode, initialScenario }: Impa
   const sliderMin = Math.min(SLIDER_MIN, scenario.oldLimitPpm / 2);
   const sliderMax = Math.max(SLIDER_MAX, scenario.oldLimitPpm * 2);
 
+  const recentHistory = useMemo(() => history.slice(0, 5), [history]);
   const { overLimitCount, compliantCount } = useMemo(() => {
     const over = scenario.deltas.filter((delta) => delta.after === "OVER_LIMIT").length;
     return { overLimitCount: over, compliantCount: scenario.deltas.length - over };
@@ -143,6 +155,11 @@ export function ImpactSimulator({ bomId, regulationCode, initialScenario }: Impa
             <p className="px-4 py-3 text-sm text-slate-500">No parts flip state under the current threshold.</p>
           ) : null}
         </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <ScenarioHistory history={recentHistory} />
+          <FreshnessPanel freshness={freshness} />
+        </div>
       </div>
     </SectionCard>
   );
@@ -155,4 +172,79 @@ function StatCard({ label, value }: { label: string; value: number }) {
       <p className="text-2xl font-semibold text-white">{value}</p>
     </div>
   );
+}
+
+function ScenarioHistory({ history }: { history: ImpactHistory }) {
+  if (!history.length) {
+    return (
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">
+        No saved scenarios yet. Move the slider to persist deltas for quick comparisons.
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+      <p className="text-xs uppercase tracking-wide text-slate-500">Recent scenarios</p>
+      <ul className="mt-3 space-y-3">
+        {history.map((record) => {
+          const timestamp =
+            formatTimestamp(record.payload.recordedAtIso || record.createdAt) ?? "Unknown time";
+          const summary = record.payload.summary;
+          const parts = summary?.affectedParts ?? record.payload.deltas.length;
+          const suppliers = summary?.affectedSuppliers ?? "-";
+          return (
+            <li key={record.id} className="rounded-xl border border-slate-800/80 bg-slate-900/30 p-3">
+              <p className="text-sm font-semibold text-white">
+                {record.payload.regulationCode} · {timestamp}
+              </p>
+              <p className="text-xs text-slate-400">
+                Parts: <span className="text-white">{parts}</span> · Suppliers:{" "}
+                <span className="text-white">{suppliers}</span> · Assemblies:{" "}
+                <span className="text-white">{summary?.affectedAssemblies ?? "-"}</span>
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function FreshnessPanel({ freshness }: { freshness: RiskDataFreshness }) {
+  const entries: Array<{ label: string; value?: string | null }> = [
+    { label: "BOM components", value: freshness.bomComponentsUpdatedAt },
+    { label: "Certificates", value: freshness.certificatesUpdatedAt },
+    { label: "Suppliers", value: freshness.supplierUpdatedAt },
+    { label: "Impact scenarios", value: freshness.scenarioUpdatedAt },
+    { label: "Data cursor", value: freshness.latestCursor }
+  ];
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+      <p className="text-xs uppercase tracking-wide text-slate-500">Risk data freshness</p>
+      <dl className="mt-3 space-y-2 text-sm">
+        {entries.map((entry) => (
+          <div key={entry.label} className="flex items-center justify-between text-slate-400">
+            <dt>{entry.label}</dt>
+            <dd className="font-mono text-xs text-white">{formatTimestamp(entry.value) ?? "n/a"}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function formatTimestamp(iso?: string | null) {
+  if (!iso) {
+    return null;
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
 }

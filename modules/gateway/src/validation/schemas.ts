@@ -24,12 +24,25 @@ export const supplierRequestSchema = z
   })
   .strict() satisfies z.ZodType<SupplierRequestInput>;
 
+const impactLimitOverrideSchema = z
+  .object({
+    substance: z.string().min(1),
+    limitPpm: z.number().positive()
+  })
+  .strict();
+
 export const impactPredictSchema = z
   .object({
     tenantId: z.string().min(1),
     regulationCode: z.string().min(1),
-    newLimitPpm: z.number().positive(),
+    newLimitPpm: z.number().positive().optional(),
+    limitVector: z.array(impactLimitOverrideSchema).min(1).optional(),
+    ttlMinutes: z.number().int().positive().max(24 * 60).optional(),
     bomId: uuid().optional()
+  })
+  .refine((value) => Boolean(value.newLimitPpm || (value.limitVector?.length ?? 0) > 0), {
+    message: 'Provide either newLimitPpm or limitVector',
+    path: ['limitVector']
   })
   .strict() satisfies z.ZodType<ImpactPredictRequest>;
 

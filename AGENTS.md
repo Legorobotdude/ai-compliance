@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 CRITICAL: ALWAYS REFERENCE Architecture.md
-IMPORTANT: Update progress.md with completed work
+IMPORTANT: After completing major changes, update progress.md with completed work
 
 ## Project Structure & Module Organization
 - `apps/`: Deployable services (`api`, `web`, `worker`, `cora`). API hosts the Express gateway; worker runs Temporal/BullMQ workflows; web is the Next.js dashboard; cora is the Python LLM sidecar.

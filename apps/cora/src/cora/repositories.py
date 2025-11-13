@@ -201,7 +201,7 @@ class RiskRepository:
                 supplier_id=row["supplier_id"],
                 status=row["status"],
                 reason=row["reason"],
-                findings=row["findings"] or [],
+                findings=_normalize_findings(row["findings"]),
                 valid_until=row["valid_until"]
             )
             for row in rows
@@ -259,3 +259,20 @@ class LlmLogRepository:
 
 def _json_dump(payload: Any) -> str:
     return orjson.dumps(payload, default=str).decode()
+
+
+def _normalize_findings(value: Any) -> list[dict[str, Any]]:
+    """Ensure findings always deserialize to a list of dicts."""
+    if value is None:
+        return []
+    payload = value
+    if isinstance(payload, (bytes, bytearray)):
+        payload = payload.decode()
+    if isinstance(payload, str):
+        try:
+            payload = orjson.loads(payload)
+        except orjson.JSONDecodeError:
+            return []
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    return []

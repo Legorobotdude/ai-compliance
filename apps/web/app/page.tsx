@@ -43,6 +43,8 @@ export default async function DashboardPage() {
         bomId={snapshot.bom.id}
         regulationCode="PFAS"
         initialScenario={snapshot.impact}
+        history={snapshot.impactHistory}
+        freshness={snapshot.riskDataFreshness}
       />
       <AuditLogFeed entries={snapshot.auditLogs} />
       <RoleGate allow={["analyst", "admin"]} fallback={<LockedCard label="Ops Center" />}>

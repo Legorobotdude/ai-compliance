@@ -53,24 +53,37 @@ export class DashboardService {
     }
 
     const bomId = params.bomId ?? bomMeta.id;
-    const [bomRows, statusCounts, suppliers, requestDurations, auditLogs, issues, exposureRows, regulations, slaAggregates] =
-      await Promise.all([
-        this.repository.fetchBomRows(tenantId, bomId),
-        this.repository.fetchStatusCounts(tenantId, bomId),
-        this.repository.listSuppliers(tenantId, this.supplierLimit),
-        this.repository.listSupplierRequestDurations(tenantId),
-        this.repository.listAuditLogs(tenantId, this.auditLogLimit),
-        this.repository.listIngestionIssues(tenantId, this.issueLimit),
-        this.repository.listSupplierExposure(tenantId),
-        this.repository.listRegulations(3),
-        this.repository.listSlaAggregates(tenantId)
-      ]);
+    const [
+      bomRows,
+      statusCounts,
+      suppliers,
+      requestDurations,
+      auditLogs,
+      issues,
+      exposureRows,
+      regulations,
+      slaAggregates
+    ] = await Promise.all([
+      this.repository.fetchBomRows(tenantId, bomId),
+      this.repository.fetchStatusCounts(tenantId, bomId),
+      this.repository.listSuppliers(tenantId, this.supplierLimit),
+      this.repository.listSupplierRequestDurations(tenantId),
+      this.repository.listAuditLogs(tenantId, this.auditLogLimit),
+      this.repository.listIngestionIssues(tenantId, this.issueLimit),
+      this.repository.listSupplierExposure(tenantId),
+      this.repository.listRegulations(3),
+      this.repository.listSlaAggregates(tenantId)
+    ]);
 
     const bomItems = this.mapBomRows(bomRows);
     const statusMap = this.normalizeStatusCounts(statusCounts);
     const supplierSnapshots = this.mapSuppliers(suppliers, requestDurations);
-    const risk = await this.buildRiskSummary(tenantId, regulations, statusMap, exposureRows);
-    const impact = await this.buildImpactPreview(tenantId, bomId);
+    const [risk, impact, impactHistory, riskDataFreshness] = await Promise.all([
+      this.buildRiskSummary(tenantId, regulations, statusMap, exposureRows),
+      this.buildImpactPreview(tenantId, bomId),
+      this.riskService.listRecentImpactScenarios(tenantId, 5),
+      this.riskService.getRiskDataFreshness(tenantId)
+    ]);
     const auditEntries = auditLogs.map<AuditLogEntryDto>((log) => ({
       id: log.id,
       promptHash: log.promptHash,
@@ -116,9 +129,11 @@ export class DashboardService {
       suppliers: supplierSnapshots,
       risk,
       impact,
+      impactHistory,
       auditLogs: auditEntries,
       ingestionIssues: opsIssues,
-      slaLeaderboard
+      slaLeaderboard,
+      riskDataFreshness
     };
   }
 
@@ -246,7 +261,7 @@ export class DashboardService {
     return this.riskService.predictImpact({
       tenantId,
       regulationCode: this.defaultImpactRegulation,
-      newLimitPpm: this.defaultImpactLimitPpm,
+      limitVector: [{ substance: this.defaultImpactRegulation, limitPpm: this.defaultImpactLimitPpm }],
       bomId
     });
   }
