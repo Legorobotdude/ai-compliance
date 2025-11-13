@@ -11,6 +11,8 @@ import { RoleGate } from "@/components/rbac/role-gate";
 import { RoleSwitcher } from "@/components/rbac/role-switcher";
 import { fetchDashboardSnapshot } from "@/lib/api/dashboard";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const snapshot = await fetchDashboardSnapshot();
 

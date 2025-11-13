@@ -107,7 +107,11 @@ function resolveBaselineLimit(
   }
   const normalized = normalizeSubstance(substance);
   const regulationLimit = regulationMap.get(normalized);
-  return typeof regulationLimit === 'number' ? regulationLimit : Number.POSITIVE_INFINITY;
+  if (typeof regulationLimit === 'number') {
+    return regulationLimit;
+  }
+  const fallback = getStrictestRegulationLimit(regulationMap);
+  return typeof fallback === 'number' ? fallback : Number.POSITIVE_INFINITY;
 }
 
 function resolveScenarioLimit(
@@ -188,4 +192,17 @@ function buildLimitMap<T extends { substance: string; limitPpm: number }>(limits
 
 function normalizeSubstance(substance: string): string {
   return substance.trim().toUpperCase();
+}
+
+function getStrictestRegulationLimit(map: Map<string, number>): number | undefined {
+  let strictest: number | undefined;
+  for (const value of map.values()) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      continue;
+    }
+    if (strictest === undefined || value < strictest) {
+      strictest = value;
+    }
+  }
+  return strictest;
 }

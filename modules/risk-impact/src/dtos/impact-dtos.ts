@@ -108,3 +108,89 @@ export interface RiskDataFreshness {
   scenarioUpdatedAt?: string | null;
   latestCursor?: string | null;
 }
+
+export type RiskScoreComponentId =
+  | 'overLimit'
+  | 'missingExpired'
+  | 'expiryPressure'
+  | 'supplierRisk';
+
+export interface RiskScoreWeights {
+  overLimit: number;
+  missingExpired: number;
+  expiryPressure: number;
+  supplierRisk: number;
+}
+
+export interface RiskScoreComponent {
+  id: RiskScoreComponentId;
+  label: string;
+  weight: number;
+  normalizedValue: number;
+  rawValue: number;
+  unit: 'ratio' | 'days' | 'score';
+  penalty: number;
+}
+
+export interface RiskScoreSummary {
+  score: number;
+  minScore: number;
+  maxScore: number;
+  components: RiskScoreComponent[];
+}
+
+export interface FrameworkCoverageSlice {
+  code: string;
+  name: string;
+  percent: number;
+  violations: number;
+  totalParts: number;
+}
+
+export interface RiskTrendPoint {
+  label: string;
+  score: number;
+  delta?: number;
+}
+
+export interface SupplierExposurePoint {
+  supplierId: UUID | null;
+  supplierName: string;
+  incidents: number;
+  exposure: number;
+  complianceRate?: number;
+  responseAvgDays?: number;
+}
+
+export interface SupplierGapSummary {
+  supplierId: UUID | null;
+  supplierName: string;
+  missing: number;
+  expired: number;
+  overLimit: number;
+  nextExpiryDays?: number | null;
+  responseAvgDays?: number;
+  complianceRate?: number;
+  gapSeverity: number;
+}
+
+export interface RiskAnalyticsSnapshot {
+  tenantId: TenantID;
+  bomId?: UUID;
+  generatedAt: string;
+  riskScore: RiskScoreSummary;
+  frameworks: FrameworkCoverageSlice[];
+  trend: RiskTrendPoint[];
+  supplierExposure: SupplierExposurePoint[];
+  gaps: SupplierGapSummary[];
+}
+
+export interface RiskAnalyticsRequest {
+  tenantId: TenantID;
+  bomId?: UUID;
+  weights?: Partial<RiskScoreWeights>;
+  frameworkLimit?: number;
+  supplierExposureLimit?: number;
+  gapLimit?: number;
+  trendPoints?: number;
+}

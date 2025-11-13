@@ -5,6 +5,8 @@ import { CoraPlayground } from "@/components/lab/cora-playground";
 import { fetchDashboardSnapshot } from "@/lib/api/dashboard";
 import { getUserIdFromToken } from "@/lib/env";
 
+export const dynamic = "force-dynamic";
+
 export default async function LabPage() {
   const [snapshot, uploaderId] = await Promise.all([
     fetchDashboardSnapshot(),

@@ -5,7 +5,6 @@ import type {
   DashboardSnapshotDto,
   DashboardBomRow,
   SupplierScorecardSnapshot,
-  RiskSummaryDto,
   AuditLogEntryDto,
   OpsIssueDto,
   SlaLeaderboardEntryDto
@@ -19,8 +18,6 @@ export interface DashboardServiceOptions {
   defaultImpactRegulation?: string;
   defaultImpactLimitPpm?: number;
 }
-
-const STATUS_ORDER = ['COMPLIANT', 'MISSING', 'EXPIRED', 'OVER_LIMIT'] as const;
 
 export class DashboardService {
   private readonly supplierLimit: number;
@@ -53,33 +50,29 @@ export class DashboardService {
     }
 
     const bomId = params.bomId ?? bomMeta.id;
-    const [
-      bomRows,
-      statusCounts,
-      suppliers,
-      requestDurations,
-      auditLogs,
-      issues,
-      exposureRows,
-      regulations,
-      slaAggregates
-    ] = await Promise.all([
+    const [bomRows, statusCounts, suppliers, requestDurations, auditLogs, issues, slaAggregates] =
+      await Promise.all([
       this.repository.fetchBomRows(tenantId, bomId),
       this.repository.fetchStatusCounts(tenantId, bomId),
       this.repository.listSuppliers(tenantId, this.supplierLimit),
       this.repository.listSupplierRequestDurations(tenantId),
       this.repository.listAuditLogs(tenantId, this.auditLogLimit),
       this.repository.listIngestionIssues(tenantId, this.issueLimit),
-      this.repository.listSupplierExposure(tenantId),
-      this.repository.listRegulations(3),
       this.repository.listSlaAggregates(tenantId)
-    ]);
+      ]);
 
     const bomItems = this.mapBomRows(bomRows);
     const statusMap = this.normalizeStatusCounts(statusCounts);
     const supplierSnapshots = this.mapSuppliers(suppliers, requestDurations);
     const [risk, impact, impactHistory, riskDataFreshness] = await Promise.all([
-      this.buildRiskSummary(tenantId, regulations, statusMap, exposureRows),
+      this.riskService.getRiskAnalyticsSnapshot({
+        tenantId,
+        bomId,
+        frameworkLimit: 4,
+        supplierExposureLimit: 6,
+        gapLimit: 4,
+        trendPoints: 6
+      }),
       this.buildImpactPreview(tenantId, bomId),
       this.riskService.listRecentImpactScenarios(tenantId, 5),
       this.riskService.getRiskDataFreshness(tenantId)
@@ -207,56 +200,6 @@ export class DashboardService {
     });
   }
 
-  private async buildRiskSummary(
-    tenantId: TenantID,
-    regulations: Awaited<ReturnType<DashboardRepository['listRegulations']>>,
-    statusCounts: Record<DashboardBomRow['status'], number>,
-    exposureRows: Awaited<ReturnType<DashboardRepository['listSupplierExposure']>>
-  ): Promise<RiskSummaryDto> {
-    const frameworks = [];
-    for (const regulation of regulations) {
-      const violationStats = await this.repository.countRegulationViolations(tenantId, regulation.id);
-      const totalParts = violationStats.totalParts || 1;
-      const violations = violationStats.violationParts ?? 0;
-      const percent = Math.max(0, 1 - violations / totalParts);
-      frameworks.push({
-        code: regulation.code,
-        name: regulation.name,
-        percent: Number(percent.toFixed(2))
-      });
-    }
-
-    const trend = this.buildRiskTrend(statusCounts);
-    const supplierExposure = exposureRows
-      .map((row) => ({
-        supplierId: row.supplierId ?? ('00000000-0000-0000-0000-000000000000' as UUID),
-        supplierName: row.supplierName ?? 'Unassigned',
-        incidents: row.incidents,
-        exposure: row.exposure
-      }))
-      .slice(0, 6);
-
-    return {
-      frameworks,
-      trend,
-      supplierExposure
-    };
-  }
-
-  private buildRiskTrend(statusCounts: Record<DashboardBomRow['status'], number>) {
-    const total = STATUS_ORDER.reduce((acc, status) => acc + (statusCounts[status] ?? 0), 0) || 1;
-    const overLimit = statusCounts.OVER_LIMIT ?? 0;
-    const expired = statusCounts.EXPIRED ?? 0;
-    const missing = statusCounts.MISSING ?? 0;
-    const riskPenalty = (overLimit * 2 + expired * 1.5 + missing) / total;
-    const baseScore = clamp(95 - riskPenalty * 40, 45, 95);
-    const adjustments = [-6, -3, -1, 0, 2, 4];
-    return adjustments.map((delta, index) => ({
-      label: `W${index + 1}`,
-      score: Math.round(clamp(baseScore + delta, 40, 98))
-    }));
-  }
-
   private async buildImpactPreview(tenantId: TenantID, bomId: UUID): Promise<ImpactPredictResponse> {
     return this.riskService.predictImpact({
       tenantId,
@@ -289,8 +232,4 @@ function average(values: number[]): number {
     return 0;
   }
   return values.reduce((acc, value) => acc + value, 0) / values.length;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
 }

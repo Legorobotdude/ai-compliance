@@ -19,7 +19,7 @@ type ImpactSimulatorProps = {
   freshness: RiskDataFreshness;
 };
 
-const SLIDER_MIN = 25;
+const SLIDER_MIN = 5;
 const SLIDER_MAX = 1000;
 
 export function ImpactSimulator({
@@ -59,7 +59,6 @@ export function ImpactSimulator({
             body: JSON.stringify({
               regulationCode,
               newLimitPpm: limit,
-              limitVector: [{ substance: regulationCode, limitPpm: limit }],
               bomId
             }),
             signal: controller.signal

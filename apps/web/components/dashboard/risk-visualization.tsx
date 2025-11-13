@@ -30,13 +30,74 @@ export function RiskVisualization({ risk }: RiskVisualizationProps) {
     ...framework,
     percent: Math.round(framework.percent * 100)
   }));
+  const topGaps = risk.gaps;
 
   return (
     <SectionCard
       title="Risk Visualization"
-      description="Framework saturation, trend, and supplier exposure (Architecture §6)."
+      description="Risk score, framework saturation, trend, supplier exposure, and supplier gaps (Architecture §6)."
       className="space-y-6"
     >
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+          <p className="text-sm text-slate-400">Composite risk score</p>
+          <div className="mt-4 flex items-baseline gap-2">
+            <span className="text-4xl font-semibold text-white">{risk.riskScore.score}</span>
+            <span className="text-sm text-slate-400">/ 100</span>
+          </div>
+          <div className="mt-4 h-2 rounded-full bg-slate-800">
+            <div
+              className="h-full rounded-full bg-brand-400 transition-all"
+              style={{ width: `${risk.riskScore.score}%` }}
+            />
+          </div>
+          <ul className="mt-4 space-y-3 text-sm">
+            {risk.riskScore.components.map((component) => (
+              <li key={component.id} className="flex items-center justify-between">
+                <span className="text-slate-400">{component.label}</span>
+                <span className="font-medium text-white">
+                  {Math.round(component.penalty).toLocaleString()}%
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 lg:col-span-2">
+          <p className="text-sm text-slate-400">Top supplier gaps</p>
+          <div className="mt-4 space-y-4">
+            {topGaps.length === 0 && (
+              <p className="text-sm text-slate-500">No outstanding supplier gaps detected.</p>
+            )}
+            {topGaps.map((gap) => (
+              <div
+                key={gap.supplierId ?? gap.supplierName}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 text-sm"
+              >
+                <div>
+                  <p className="font-medium text-white">{gap.supplierName}</p>
+                  <p className="text-xs text-slate-400">
+                    {gap.missing} missing · {gap.expired} expired · {gap.overLimit} over limit
+                  </p>
+                </div>
+                <div className="flex flex-col text-right text-xs text-slate-400">
+                  <span>
+                    Next expiry:{' '}
+                    {gap.nextExpiryDays == null
+                      ? 'n/a'
+                      : `${Math.max(Math.round(gap.nextExpiryDays), 0)}d`}
+                  </span>
+                  <span>
+                    Response avg:{' '}
+                    {gap.responseAvgDays == null ? 'n/a' : `${gap.responseAvgDays.toFixed(1)}d`}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="h-64 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
           <p className="text-sm text-slate-400">Framework coverage</p>

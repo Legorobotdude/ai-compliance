@@ -63,24 +63,6 @@ type AuditLogRecord = {
   createdAt: string;
 };
 
-type SupplierExposureRecord = {
-  supplierId: UUID | null;
-  supplierName: string | null;
-  incidents: number;
-  exposure: number;
-};
-
-type RegulationRecord = {
-  id: UUID;
-  code: string;
-  name: string;
-};
-
-type RegulationViolationRecord = {
-  violationParts: number;
-  totalParts: number;
-};
-
 type SlaAggregateRecord = {
   supplierId: UUID;
   supplierName: string;
@@ -278,76 +260,6 @@ export class DashboardRepository {
       `,
       values: [tenantId, limit]
     });
-  }
-
-  async listSupplierExposure(tenantId: TenantID): Promise<SupplierExposureRecord[]> {
-    return this.db.query<SupplierExposureRecord>({
-      text: `
-        select
-          coalesce(v.supplier_id, cs.supplier_id) as "supplierId",
-          s.name as "supplierName",
-          count(*)::int as incidents,
-          coalesce(sum(bc.normalized_weight_mg)::int, 0) as exposure
-        from v_blocked_supplier_parts v
-        left join suppliers s on s.id = v.supplier_id
-        left join component_suppliers cs
-          on cs.tenant_id = v.tenant_id
-         and cs.part_number = v.part_number
-        left join bom_components bc
-          on bc.tenant_id = v.tenant_id
-         and bc.part_number = v.part_number
-        where v.tenant_id = $1
-        group by coalesce(v.supplier_id, cs.supplier_id), s.name
-        having count(*) > 0
-        order by incidents desc
-      `,
-      values: [tenantId]
-    });
-  }
-
-  async listRegulations(limit: number): Promise<RegulationRecord[]> {
-    return this.db.query<RegulationRecord>({
-      text: `
-        select id, code, name
-        from regulations
-        order by effective_date desc
-        limit $1
-      `,
-      values: [limit]
-    });
-  }
-
-  async countRegulationViolations(
-    tenantId: TenantID,
-    regulationId: UUID
-  ): Promise<RegulationViolationRecord> {
-    const rows = await this.db.query<RegulationViolationRecord>({
-      text: `
-        with limits as (
-          select rl.substance, rl.limit_ppm
-          from regulation_limits rl
-          where rl.regulation_id = $2
-        ),
-        violation_parts as (
-          select distinct c.part_number
-          from certificates c
-          join certificate_findings cf on cf.certificate_id = c.id
-          join limits l on l.substance = cf.substance_name
-          where c.tenant_id = $1
-            and cf.concentration_ppm is not null
-            and cf.concentration_ppm > l.limit_ppm
-        )
-        select
-          (select count(*) from violation_parts)::int as "violationParts",
-          (
-            select count(distinct bc.part_number)
-            from bom_components bc
-            where bc.tenant_id = $1
-          )::int as "totalParts"
-      `,
-      values: [tenantId, regulationId]
-    });
-    return rows[0] ?? { violationParts: 0, totalParts: 0 };
   }
 
   async listSlaAggregates(tenantId: TenantID): Promise<SlaAggregateRecord[]> {

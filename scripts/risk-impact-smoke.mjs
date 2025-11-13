@@ -70,22 +70,36 @@ async function main() {
   if (!bomId) {
     throw new Error('Dashboard snapshot missing BOM ID—seed data before running smoke test.');
   }
+  verifyRiskAnalytics(snapshot?.risk);
   const regulationCode = snapshot?.impact?.regulation || 'PFAS';
   const baselineLimit = snapshot?.impact?.oldLimitPpm ?? 100;
+  const baselineLimits = Array.isArray(snapshot?.impact?.baselineLimits)
+    ? snapshot.impact.baselineLimits.filter(
+        (limit) => typeof limit?.limitPpm === 'number' && Number.isFinite(limit.limitPpm)
+      )
+    : [];
 
   section('Calling /impact/predict with a stricter limit');
-  const newLimit = Math.max(5, Math.round(baselineLimit * 0.5));
+  const newLimit = Math.max(1, Math.round(baselineLimit * 0.1));
+  const overrideVector =
+    baselineLimits.length > 0
+      ? baselineLimits.map((limit) => ({
+          substance: limit.substance,
+          limitPpm: Math.max(1, Math.round(limit.limitPpm * 0.1))
+        }))
+      : undefined;
   const impact = await apiFetch('/impact/predict', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       tenantId: TENANT_ID,
       regulationCode,
-      newLimitPpm: newLimit,
-      limitVector: [{ substance: regulationCode, limitPpm: newLimit }],
+      newLimitPpm: overrideVector ? undefined : newLimit,
+      limitVector: overrideVector,
       bomId
     })
   });
+  verifyImpactDelta(impact, baselineLimit, overrideVector ? overrideVector[0]?.limitPpm ?? newLimit : newLimit);
   logResult('Impact simulator response', {
     regulation: impact.regulation,
     oldLimitPpm: impact.oldLimitPpm,
@@ -227,6 +241,65 @@ function section(label) {
 
 function logResult(label, details) {
   console.log(`   ${label}: ${JSON.stringify(details, null, 2)}`);
+}
+
+function verifyRiskAnalytics(risk) {
+  section('Validating risk analytics snapshot');
+  if (!risk) {
+    throw new Error('Dashboard snapshot missing risk analytics payload; ensure RiskImpactService Phase 3 is wired.');
+  }
+
+  const riskScore = risk.riskScore;
+  if (!riskScore || typeof riskScore.score !== 'number') {
+    throw new Error('Risk analytics missing composite score.');
+  }
+  if (!Array.isArray(riskScore.components) || riskScore.components.length === 0) {
+    throw new Error('Risk analytics missing score components; expected w1–w4 breakdown.');
+  }
+  logResult('Risk score summary', {
+    score: riskScore.score,
+    components: riskScore.components.map((component) => ({
+      id: component.id,
+      penalty: Math.round(component.penalty)
+    }))
+  });
+
+  if (!Array.isArray(risk.frameworks) || risk.frameworks.length === 0) {
+    throw new Error('Risk analytics missing framework coverage slices.');
+  }
+  logResult('Framework coverage sample', risk.frameworks.slice(0, 3));
+
+  if (!Array.isArray(risk.trend) || risk.trend.length === 0) {
+    throw new Error('Risk analytics missing risk trend series.');
+  }
+
+  if (!Array.isArray(risk.supplierExposure) || risk.supplierExposure.length === 0) {
+    console.warn('⚠️  Risk analytics supplier exposure list empty – verify blocked parts data.');
+  } else {
+    logResult('Supplier exposure sample', risk.supplierExposure.slice(0, 3));
+  }
+
+  if (!Array.isArray(risk.gaps)) {
+    throw new Error('Risk analytics gaps field is not an array.');
+  }
+  logResult('Supplier gap sample', risk.gaps.slice(0, 3));
+}
+
+function verifyImpactDelta(impact, baselineLimit, newLimit) {
+  if (!impact || typeof impact !== 'object') {
+    throw new Error('Impact simulator response missing.');
+  }
+
+  const deltas = Array.isArray(impact.deltas) ? impact.deltas : [];
+  const summary = impact.summary ?? {};
+  const affectedParts = typeof summary.affectedParts === 'number' ? summary.affectedParts : deltas.length;
+
+  if (affectedParts === 0 || deltas.length === 0) {
+    throw new Error(
+      `Impact simulator returned zero deltas after tightening from ${baselineLimit}ppm to ${newLimit}ppm. ` +
+        'Ensure seeded PFAS findings exist (Architecture.md §5 sample data) and that the limit override is applied.'
+    );
+  }
 }
 
 function shouldRetryFetchError(error) {

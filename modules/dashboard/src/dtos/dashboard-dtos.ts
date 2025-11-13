@@ -2,6 +2,7 @@ import type { ComplianceStatusRow, TenantID, UUID } from '@certivo/lib-db';
 import type {
   ImpactPredictResponse,
   ImpactScenarioRecord,
+  RiskAnalyticsSnapshot,
   RiskDataFreshness
 } from '@certivo/risk-impact';
 
@@ -17,7 +18,7 @@ export interface DashboardSnapshotDto {
     statusCounts: Record<ComplianceStatusRow['status'], number>;
   };
   suppliers: SupplierScorecardSnapshot[];
-  risk: RiskSummaryDto;
+  risk: RiskAnalyticsSnapshot;
   impact: ImpactPredictResponse;
   impactHistory: ImpactScenarioRecord[];
   riskDataFreshness: RiskDataFreshness;
@@ -48,12 +49,6 @@ export interface SupplierScorecardSnapshot {
   requestsOpen: number;
   slaTrend: number[];
   lastRequest?: string | null;
-}
-
-export interface RiskSummaryDto {
-  frameworks: Array<{ code: string; name: string; percent: number }>;
-  trend: Array<{ label: string; score: number }>;
-  supplierExposure: Array<{ supplierId: UUID; supplierName: string; incidents: number; exposure: number }>;
 }
 
 export interface AuditLogEntryDto {
