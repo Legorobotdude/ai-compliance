@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@certivo/dashboard": "workspace:*",
+    "@certivo/supplier": "workspace:*",
     "@tanstack/react-table": "^8.21.2",
     "@tanstack/react-virtual": "^3.1.2",
     "clsx": "^2.1.1",
