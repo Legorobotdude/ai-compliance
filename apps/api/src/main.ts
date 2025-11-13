@@ -284,6 +284,23 @@ function buildApp(options: BuildAppOptions): Express {
     })
   );
 
+  app.get(
+    '/documents',
+    route('GET /documents', async (req, res) => {
+      const httpReq = buildHttpRequest<unknown, Record<string, string>, { limit?: string; offset?: string }>(req);
+      await controller.getDocuments(httpReq, createHttpResponse(res));
+    })
+  );
+
+  app.get(
+    '/documents/:documentId/download-url',
+    route('GET /documents/:documentId/download-url', async (req, res) => {
+      validateWithSchema(uuidSchema(), req.params.documentId);
+      const httpReq = buildHttpRequest<unknown, { documentId: string }>(req);
+      await controller.getDocumentDownloadUrl(httpReq, createHttpResponse(res));
+    })
+  );
+
   app.post(
     '/ai/parse-document',
     route('POST /ai/parse-document', async (req, res) => {

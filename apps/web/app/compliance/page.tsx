@@ -41,6 +41,12 @@ export default function CompliancePage() {
           >
             Dashboard
           </Link>
+          <Link
+            href="/documents"
+            className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
+          >
+            Documents
+          </Link>
           <RoleSwitcher />
         </div>
       </header>

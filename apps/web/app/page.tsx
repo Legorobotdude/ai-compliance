@@ -27,12 +27,30 @@ export default async function DashboardPage() {
             heatmaps, and CORA observability.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href="/documents"
+            className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
+          >
+            Documents
+          </Link>
+          <Link
+            href="/compliance"
+            className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
+          >
+            Compliance
+          </Link>
+          <Link
+            href="/risk-impact"
+            className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
+          >
+            Risk/Impact
+          </Link>
           <Link
             href="/lab"
             className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
           >
-            Open testing lab
+            Testing Lab
           </Link>
           <RoleSwitcher />
         </div>

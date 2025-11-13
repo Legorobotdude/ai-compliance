@@ -4,6 +4,8 @@ import type { RetrievedObject, StorageAdapter } from '@certivo/lib-storage';
 import type {
   DownloadUrlRequest,
   FetchRequest,
+  ListRequest,
+  ListResponse,
   SignedDownloadRequest,
   UploadRequest
 } from '../dtos/document-dtos';
@@ -84,6 +86,16 @@ export class DocumentService {
 
   async fetch(request: FetchRequest): Promise<Document | null> {
     return this.repository.findById(request.tenantId, request.documentId);
+  }
+
+  async list(request: ListRequest): Promise<ListResponse> {
+    const limit = request.limit ?? 100;
+    const offset = request.offset ?? 0;
+    const [documents, total] = await Promise.all([
+      this.repository.listByTenant(request.tenantId, limit, offset),
+      this.repository.countByTenant(request.tenantId)
+    ]);
+    return { documents, total };
   }
 
   async createDownloadUrl(request: DownloadUrlRequest): Promise<string> {

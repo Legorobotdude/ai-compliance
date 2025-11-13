@@ -32,3 +32,14 @@ export interface SignedDownloadRequest {
   expiresAt: number;
   signature: string;
 }
+
+export interface ListRequest {
+  tenantId: TenantID;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ListResponse {
+  documents: Document[];
+  total: number;
+}

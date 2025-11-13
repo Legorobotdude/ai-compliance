@@ -8,7 +8,7 @@ import type { ImpactPredictRequest } from '@certivo/risk-impact';
 import { RiskImpactController } from '@certivo/risk-impact';
 import type { ScorecardRequest, SupplierRequestInput } from '@certivo/supplier';
 import { SupplierController } from '@certivo/supplier';
-import type { FetchRequest, UploadRequest } from '@certivo/file-document';
+import type { DownloadUrlRequest, FetchRequest, ListRequest, UploadRequest } from '@certivo/file-document';
 import { DocumentController } from '@certivo/file-document';
 import type { SearchQuery } from '@certivo/search-rag';
 import { SearchController } from '@certivo/search-rag';
@@ -75,6 +75,28 @@ export class ApiController {
     const payload: FetchRequest = { tenantId: req.tenantId, documentId: req.params.documentId as unknown as UUID };
     const doc = await this.documents.get(payload);
     res.status(200).json(doc);
+  }
+
+  async getDocuments(
+    req: HttpRequest<unknown, Record<string, string>, { limit?: string; offset?: string }>,
+    res: HttpResponse
+  ) {
+    const payload: ListRequest = {
+      tenantId: req.tenantId,
+      limit: req.query.limit ? Number(req.query.limit) : undefined,
+      offset: req.query.offset ? Number(req.query.offset) : undefined
+    };
+    const result = await this.documents.list(payload);
+    res.status(200).json(result);
+  }
+
+  async getDocumentDownloadUrl(req: HttpRequest<unknown, { documentId: string }>, res: HttpResponse) {
+    const payload: DownloadUrlRequest = {
+      tenantId: req.tenantId,
+      documentId: req.params.documentId as unknown as UUID
+    };
+    const url = await this.documents.createDownloadUrl(payload);
+    res.status(200).json({ url });
   }
 
   async getSearch(

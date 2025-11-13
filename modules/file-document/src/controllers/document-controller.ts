@@ -1,6 +1,7 @@
 import type {
   DownloadUrlRequest,
   FetchRequest,
+  ListRequest,
   SignedDownloadRequest,
   UploadRequest
 } from '../dtos/document-dtos';
@@ -19,6 +20,10 @@ export class DocumentController {
       throw new Error('Document not found');
     }
     return doc;
+  }
+
+  async list(payload: ListRequest) {
+    return this.service.list(payload);
   }
 
   async createDownloadUrl(payload: DownloadUrlRequest) {

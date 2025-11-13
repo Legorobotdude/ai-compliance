@@ -92,4 +92,24 @@ export class DocumentRepository {
     });
     return rows[0] ?? null;
   }
+
+  async listByTenant(tenantId: TenantID, limit = 100, offset = 0): Promise<Document[]> {
+    return this.db.query<Document>({
+      text: `select ${DOCUMENT_COLUMNS}
+             from documents
+             where tenant_id = $1
+               and deleted_at is null
+             order by uploaded_at desc
+             limit $2 offset $3`,
+      values: [tenantId, limit, offset]
+    });
+  }
+
+  async countByTenant(tenantId: TenantID): Promise<number> {
+    const rows = await this.db.query<{ count: string }>({
+      text: `select count(*) as count from documents where tenant_id = $1 and deleted_at is null`,
+      values: [tenantId]
+    });
+    return parseInt(rows[0]?.count ?? '0', 10);
+  }
 }
