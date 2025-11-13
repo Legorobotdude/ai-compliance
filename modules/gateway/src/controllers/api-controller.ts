@@ -102,7 +102,14 @@ export class ApiController {
   }
 
   async postAiParseDocument(req: HttpRequest<AiParseDocumentRequest>, res: HttpResponse) {
-    const result = await this.cora.parseDocument(req.body);
+    const payload: AiParseDocumentRequest = { ...req.body };
+    if (!payload.downloadUrl) {
+      payload.downloadUrl = await this.documents.createDownloadUrl({
+        tenantId: req.tenantId,
+        documentId: payload.documentId
+      });
+    }
+    const result = await this.cora.parseDocument(payload);
     res.status(200).json(result);
   }
 

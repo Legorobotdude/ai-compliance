@@ -1,6 +1,7 @@
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import type { ParsedQs } from 'qs';
 import { randomUUID } from 'crypto';
+import { join } from 'node:path';
 import { Counter, Histogram, Registry, collectDefaultMetrics } from 'prom-client';
 import {
   ApiController,
@@ -20,12 +21,18 @@ import {
   RequestValidationError
 } from '@certivo/gateway';
 import type { BomUploadRequest, CertificateUploadRequest } from '@certivo/compliance';
-import type { UploadRequest } from '@certivo/file-document';
+import type { DocumentController, UploadRequest } from '@certivo/file-document';
 import type { ImpactPredictRequest } from '@certivo/risk-impact';
 import type { SupplierRequestInput } from '@certivo/supplier';
 import type { AiParseDocumentRequest, AiRiskSummaryRequest, AiSupplierEmailRequest } from '@certivo/cora';
 import type { WorkflowClient, IngestionRetryTrigger, SupplierWorkflowTrigger } from '@certivo/jobs-workflows';
-import { createPgDatabaseClient, runWithTenantContext, type DatabaseClient } from '@certivo/lib-db';
+import {
+  createPgDatabaseClient,
+  runWithTenantContext,
+  type DatabaseClient,
+  type TenantID,
+  type UUID
+} from '@certivo/lib-db';
 import { createLogger, createRequestLogger, type Logger } from '@certivo/lib-logging';
 import {
   AuthorizationError,
@@ -47,6 +54,14 @@ const AUTH_EMAIL_CLAIM = process.env.AUTH_EMAIL_CLAIM;
 const CORA_API_URL = process.env.CORA_API_URL ?? 'http://localhost:8082';
 const CORA_API_KEY = process.env.CORA_API_KEY;
 const CORA_API_TIMEOUT_MS = process.env.CORA_API_TIMEOUT_MS ? Number(process.env.CORA_API_TIMEOUT_MS) : undefined;
+const DOCUMENTS_PUBLIC_BASE_URL =
+  process.env.DOCUMENTS_PUBLIC_BASE_URL ?? process.env.CERTIVO_API_URL ?? `http://localhost:${PORT}`;
+const DOCUMENTS_SIGNING_SECRET = process.env.DOCUMENTS_SIGNING_SECRET ?? AUTH_JWT_SECRET ?? 'dev-docs-secret';
+const DOCUMENTS_DOWNLOAD_TTL_MS = process.env.DOCUMENTS_DOWNLOAD_TTL_MS
+  ? Number(process.env.DOCUMENTS_DOWNLOAD_TTL_MS)
+  : undefined;
+const DOCUMENTS_LOCAL_ROOT =
+  process.env.DOCUMENTS_LOCAL_ROOT ?? join(process.cwd(), '..', '..', '.certivo', 'documents');
 type MetricLabel = 'method' | 'route' | 'status';
 
 class NoopWorkflowClient implements WorkflowClient {
@@ -69,13 +84,19 @@ export async function startApiServer(): Promise<void> {
     process.exit(1);
   }
 
-  const apiController = ApiModuleFactory.create({
+  const { apiController, documentController } = ApiModuleFactory.create({
     db,
     workflowClient,
     cora: {
       baseUrl: CORA_API_URL,
       apiKey: CORA_API_KEY,
       timeoutMs: CORA_API_TIMEOUT_MS
+    },
+    documents: {
+      localRoot: DOCUMENTS_LOCAL_ROOT,
+      publicBaseUrl: DOCUMENTS_PUBLIC_BASE_URL,
+      signingSecret: DOCUMENTS_SIGNING_SECRET,
+      downloadTtlMs: DOCUMENTS_DOWNLOAD_TTL_MS
     }
   });
   if (!AUTH_JWKS_URL && !AUTH_JWT_SECRET) {
@@ -93,7 +114,14 @@ export async function startApiServer(): Promise<void> {
     rolesClaim: AUTH_ROLES_CLAIM,
     emailClaim: AUTH_EMAIL_CLAIM
   });
-  const app = buildApp({ controller: apiController, db, logger, metrics, jwtVerifier });
+  const app = buildApp({
+    controller: apiController,
+    documentController,
+    db,
+    logger,
+    metrics,
+    jwtVerifier
+  });
 
   const server = app.listen(PORT, () => {
     logger.info({ port: PORT }, '[api] listening');
@@ -112,6 +140,7 @@ export async function startApiServer(): Promise<void> {
 
 interface BuildAppOptions {
   controller: ApiController;
+  documentController: DocumentController;
   db: DatabaseClient;
   logger: Logger;
   metrics: ApiMetrics;
@@ -119,7 +148,7 @@ interface BuildAppOptions {
 }
 
 function buildApp(options: BuildAppOptions): Express {
-  const { controller, db, logger, metrics, jwtVerifier } = options;
+  const { controller, documentController, db, logger, metrics, jwtVerifier } = options;
   const app = express();
   app.use(express.json({ limit: '10mb' }));
   app.use(requestContextMiddleware(logger));
@@ -133,6 +162,50 @@ function buildApp(options: BuildAppOptions): Express {
 
   app.get('/readyz', readinessHandler(db));
   app.get('/metrics', metricsHandler(metrics));
+
+  app.get('/documents/raw', async (req, res) => {
+    const documentId = typeof req.query.doc === 'string' ? (req.query.doc as UUID) : null;
+    const tenantId = typeof req.query.tenant === 'string' ? (req.query.tenant as TenantID) : null;
+    const expiresParam = typeof req.query.expires === 'string' ? req.query.expires : null;
+    const signature = typeof req.query.sig === 'string' ? req.query.sig : null;
+    if (!documentId || !tenantId || !expiresParam || !signature) {
+      res.status(400).json({ error: 'Missing signed download parameters' });
+      return;
+    }
+    const expiresAt = Number(expiresParam);
+    if (!Number.isFinite(expiresAt)) {
+      res.status(400).json({ error: 'Invalid expires value' });
+      return;
+    }
+    try {
+      const result = await documentController.streamSignedDownload({
+        documentId,
+        tenantId,
+        expiresAt,
+        signature
+      });
+      res.setHeader('Content-Type', result.document.mime || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `inline; filename="${result.document.filename}"`);
+      if (result.object.contentLength != null) {
+        res.setHeader('Content-Length', String(result.object.contentLength));
+      }
+      result.object.stream.on('error', (error) => {
+        logger.error({ err: error }, 'document.raw.stream_error');
+        if (!res.headersSent) {
+          res.status(500).end();
+        } else {
+          res.destroy(error as Error);
+        }
+      });
+      result.object.stream.pipe(res);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Download failed';
+      const status =
+        message.includes('not found') ? 404 : message.includes('no longer available') ? 410 : 400;
+      logger.warn({ err: error }, 'document.raw.failed');
+      res.status(status).json({ error: message });
+    }
+  });
 
   app.use(authMiddleware(jwtVerifier));
   app.use(tenantContextMiddleware);

@@ -6,6 +6,7 @@ export interface AiParseDocumentRequest {
   tenantId: TenantID;
   documentId: UUID;
   schema?: CertificateSchema;
+  downloadUrl?: string;
 }
 
 export interface AiDocumentFinding {

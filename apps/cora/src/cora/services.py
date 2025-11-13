@@ -61,6 +61,9 @@ class DocumentParserService:
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
+        if payload.download_url:
+            document.storage_url = str(payload.download_url)
+
         excerpt = await self._load_excerpt(document)
 
         user_prompt = DOCUMENT_PARSE_USER_TEMPLATE.format(

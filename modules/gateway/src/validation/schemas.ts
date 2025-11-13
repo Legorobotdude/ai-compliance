@@ -39,8 +39,13 @@ export const documentUploadSchema = z
     filename: z.string().min(1),
     mime: z.string().min(1),
     bytes: z.number().nonnegative(),
-    storageUrl: z.string().min(1),
-    sha256: z.string().length(64)
+    storageUrl: z.string().min(1).optional(),
+    sha256: z.string().length(64),
+    dataBase64: z.string().min(1).optional()
+  })
+  .refine((value) => Boolean(value.storageUrl || value.dataBase64), {
+    message: 'Provide either storageUrl or dataBase64',
+    path: ['storageUrl']
   })
   .strict() satisfies z.ZodType<UploadRequest>;
 
@@ -48,7 +53,8 @@ export const aiParseDocumentSchema = z
   .object({
     tenantId: z.string().min(1),
     documentId: uuid(),
-    schema: z.literal('certificate_v1').optional()
+    schema: z.literal('certificate_v1').optional(),
+    downloadUrl: z.string().url().optional()
   })
   .strict() satisfies z.ZodType<AiParseDocumentRequest>;
 

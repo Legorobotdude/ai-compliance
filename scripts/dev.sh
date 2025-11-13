@@ -20,6 +20,10 @@ export CORA_API_URL="${CORA_API_URL:-http://localhost:8082}"
 export CERTIVO_API_URL="${CERTIVO_API_URL:-http://localhost:4000}"
 export CORA_DATABASE_URL="${CORA_DATABASE_URL:-$DATABASE_URL}"
 export CORA_OPENAI_MODEL="${CORA_OPENAI_MODEL:-gpt-4o-mini}"
+export DOCUMENTS_LOCAL_ROOT="${DOCUMENTS_LOCAL_ROOT:-${ROOT_DIR}/.certivo/documents}"
+export DOCUMENTS_PUBLIC_BASE_URL="${DOCUMENTS_PUBLIC_BASE_URL:-${CERTIVO_API_URL}}"
+export DOCUMENTS_SIGNING_SECRET="${DOCUMENTS_SIGNING_SECRET:-${AUTH_JWT_SECRET:-dev-docs-secret}}"
+mkdir -p "${DOCUMENTS_LOCAL_ROOT}"
 
 if [[ -z "${CERTIVO_API_TOKEN:-}" ]]; then
   echo "❌ CERTIVO_API_TOKEN is not set."
@@ -37,6 +41,8 @@ fi
 
 echo "🚀 Starting API, Web, and CORA sidecar..."
 cd "${ROOT_DIR}"
+echo "🛠️  Building workspace packages..."
+pnpm build >/dev/null
 pnpm dlx concurrently \
   --kill-others-on-fail \
   --names "api,web,cora" \

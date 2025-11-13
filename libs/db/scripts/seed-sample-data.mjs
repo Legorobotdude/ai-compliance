@@ -203,15 +203,18 @@ async function upsertDocuments(client, tenantId, sample) {
 
   for (const doc of docs) {
     await client.query(
-      `insert into documents (id, tenant_id, filename, mime, bytes, storage_url, sha256, uploaded_at, parsed_json)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `insert into documents (id, tenant_id, filename, mime, bytes, storage_url, sha256, uploaded_at, parsed_json, upload_status, upload_completed_at, scan_status)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        on conflict (id) do update
        set filename = excluded.filename,
            mime = excluded.mime,
            bytes = excluded.bytes,
            storage_url = excluded.storage_url,
            sha256 = excluded.sha256,
-           parsed_json = excluded.parsed_json`,
+           parsed_json = excluded.parsed_json,
+           upload_status = excluded.upload_status,
+           upload_completed_at = excluded.upload_completed_at,
+           scan_status = excluded.scan_status`,
       [
         doc.id,
         tenantId,
@@ -221,7 +224,10 @@ async function upsertDocuments(client, tenantId, sample) {
         doc.storageUrl,
         doc.sha256,
         doc.uploadedAt,
-        doc.parsedJson
+        doc.parsedJson,
+        'READY',
+        doc.uploadedAt,
+        'NOT_REQUIRED'
       ]
     );
   }

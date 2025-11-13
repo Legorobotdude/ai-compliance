@@ -17,6 +17,7 @@
     "@certivo/file-document": "workspace:*",
     "@certivo/jobs-workflows": "workspace:*",
     "@certivo/lib-db": "workspace:*",
+    "@certivo/lib-storage": "workspace:*",
     "@certivo/risk-impact": "workspace:*",
     "@certivo/search-rag": "workspace:*",
     "@certivo/supplier": "workspace:*",

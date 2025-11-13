@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import AliasChoices, BaseModel, Field, FieldValidationInfo, PositiveInt, field_validator
+from pydantic import AliasChoices, AnyHttpUrl, BaseModel, Field, FieldValidationInfo, PositiveInt, field_validator
 
 
 class LlmAgent(str, Enum):
@@ -52,6 +52,7 @@ class DocumentParsePayload(BaseModel):
 class DocumentParseRequest(BaseModel):
     document_id: UUID
     schema: Literal["certificate_v1"] = "certificate_v1"
+    download_url: AnyHttpUrl | None = None
 
 
 class DocumentParseResponse(DocumentParsePayload):

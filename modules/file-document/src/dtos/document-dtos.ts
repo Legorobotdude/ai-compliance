@@ -5,8 +5,9 @@ export interface UploadRequest {
   filename: string;
   mime: string;
   bytes: number;
-  storageUrl: string;
+  storageUrl?: string;
   sha256: string;
+  dataBase64?: string;
 }
 
 export interface DocumentResponse {
@@ -17,4 +18,17 @@ export interface DocumentResponse {
 export interface FetchRequest {
   tenantId: TenantID;
   documentId: UUID;
+}
+
+export interface DownloadUrlRequest {
+  tenantId: TenantID;
+  documentId: UUID;
+  expiresInMs?: number;
+}
+
+export interface SignedDownloadRequest {
+  tenantId: TenantID;
+  documentId: UUID;
+  expiresAt: number;
+  signature: string;
 }

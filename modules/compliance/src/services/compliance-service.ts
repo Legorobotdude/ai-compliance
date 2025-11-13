@@ -1,5 +1,6 @@
 import type { AiParseDocumentResponse, CoraService } from '@certivo/cora';
 import type { TenantID, UUID } from '@certivo/lib-db';
+import type { DocumentService } from '@certivo/file-document';
 import type {
   BomAssemblyInput,
   BomUploadRequest,
@@ -22,7 +23,11 @@ import { BomIngestionError } from '../errors.js';
 import { extractAssembliesFromRequest } from './bom-ingestion-parser.js';
 
 export class ComplianceService {
-  constructor(private readonly repo: ComplianceRepository, private readonly cora?: CoraService) {}
+  constructor(
+    private readonly repo: ComplianceRepository,
+    private readonly cora?: CoraService,
+    private readonly documents?: DocumentService
+  ) {}
 
   async ingestBom(request: BomUploadRequest): Promise<BomUploadResponse> {
     const issues: BomUploadResponse['issues'] = [];
@@ -162,10 +167,19 @@ export class ComplianceService {
       return [];
     }
     try {
+      const downloadUrl =
+        this.documents && certificate.sourceDocumentId
+          ? await this.documents.createDownloadUrl({
+              tenantId,
+              documentId: certificate.sourceDocumentId,
+              expiresInMs: 5 * 60_000
+            })
+          : undefined;
       const response = await this.cora.parseDocument({
         tenantId,
         documentId: certificate.sourceDocumentId,
-        schema: 'certificate_v1'
+        schema: 'certificate_v1',
+        downloadUrl
       });
       this.recordCoraAmbiguities(response, certificate, issues);
       return this.mapCoraFindings(response, certificate, issues);

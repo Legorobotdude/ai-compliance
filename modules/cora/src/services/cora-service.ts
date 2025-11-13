@@ -59,7 +59,8 @@ export class CoraService {
       '/ai/parse-document',
       {
         document_id: payload.documentId,
-        schema: payload.schema ?? 'certificate_v1'
+        schema: payload.schema ?? 'certificate_v1',
+        download_url: payload.downloadUrl
       },
       payload.tenantId
     );

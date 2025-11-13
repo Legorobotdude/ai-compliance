@@ -19,12 +19,6 @@
 
 **Inter-module communication:** In-process TypeScript interfaces (or gRPC-like contracts) keep boundaries explicit. Long-running/async work is handed off via Redis/Temporal queues. Shared libraries (auth, logging, tracing) live under `/libs` to avoid circular dependencies.
 
-**Why this over microservices (for now):**
-
-* Shared transactional DB (multi-tenant Postgres) keeps BOM↔supplier↔certificate writes atomic without distributed transactions.
-* The same team is building API, AI workflows, and UI; single deployable keeps iteration fast and reduces DevOps overhead while requirements are evolving.
-* Local DX stays simple (Docker Compose up) versus needing service meshes and multiple repos.
-* Future extraction paths exist—CORA sidecar already isolates AI dependencies, and Temporal workers can be deployed separately once traffic dictates.
 
 **Infra (local/dev → prod):**
 

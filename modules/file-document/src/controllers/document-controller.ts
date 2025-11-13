@@ -1,4 +1,9 @@
-import type { FetchRequest, UploadRequest } from '../dtos/document-dtos';
+import type {
+  DownloadUrlRequest,
+  FetchRequest,
+  SignedDownloadRequest,
+  UploadRequest
+} from '../dtos/document-dtos';
 import { DocumentService } from '../services/document-service';
 
 export class DocumentController {
@@ -14,5 +19,13 @@ export class DocumentController {
       throw new Error('Document not found');
     }
     return doc;
+  }
+
+  async createDownloadUrl(payload: DownloadUrlRequest) {
+    return this.service.createDownloadUrl(payload);
+  }
+
+  async streamSignedDownload(payload: SignedDownloadRequest) {
+    return this.service.resolveSignedDownload(payload);
   }
 }

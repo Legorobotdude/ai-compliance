@@ -91,6 +91,10 @@ export interface CertificateFinding extends Timestamped {
   dataQuality?: 'OK' | 'UNIT_MISSING' | 'VALUE_MISSING' | 'OUTLIER' | null;
 }
 
+export type DocumentUploadStatus = 'PENDING_UPLOAD' | 'UPLOADED' | 'VALIDATED' | 'READY' | 'FAILED';
+
+export type DocumentScanStatus = 'NOT_REQUIRED' | 'PENDING' | 'IN_PROGRESS' | 'CLEAN' | 'INFECTED' | 'ERROR';
+
 export interface Document extends Timestamped {
   id: UUID;
   tenantId: TenantID;
@@ -98,8 +102,19 @@ export interface Document extends Timestamped {
   mime: string;
   bytes: number;
   storageUrl: string;
+  storageBucket?: string | null;
+  storageKey?: string | null;
+  storageClass?: string | null;
+  kmsKeyId?: string | null;
   sha256: string;
   uploadedAt: string;
+  uploadStatus: DocumentUploadStatus;
+  uploadCompletedAt?: string | null;
+  scanStatus: DocumentScanStatus;
+  scanRequestedAt?: string | null;
+  scanCompletedAt?: string | null;
+  retentionExpiresAt?: string | null;
+  deletedAt?: string | null;
   parsedJson?: Record<string, unknown> | null;
 }
 

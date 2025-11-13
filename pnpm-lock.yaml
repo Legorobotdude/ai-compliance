@@ -160,6 +160,12 @@ importers:
         specifier: ^10.1.0
         version: 10.1.0
 
+  libs/storage:
+    dependencies:
+      '@certivo/lib-db':
+        specifier: workspace:*
+        version: link:../db
+
   libs/test-utils: {}
 
   libs/tracing: {}
@@ -169,6 +175,9 @@ importers:
       '@certivo/cora':
         specifier: workspace:*
         version: link:../cora
+      '@certivo/file-document':
+        specifier: workspace:*
+        version: link:../file-document
       '@certivo/lib-db':
         specifier: workspace:*
         version: link:../../libs/db
@@ -211,6 +220,9 @@ importers:
       '@certivo/lib-db':
         specifier: workspace:*
         version: link:../../libs/db
+      '@certivo/lib-storage':
+        specifier: workspace:*
+        version: link:../../libs/storage
 
   modules/gateway:
     dependencies:
@@ -232,6 +244,9 @@ importers:
       '@certivo/lib-db':
         specifier: workspace:*
         version: link:../../libs/db
+      '@certivo/lib-storage':
+        specifier: workspace:*
+        version: link:../../libs/storage
       '@certivo/risk-impact':
         specifier: workspace:*
         version: link:../risk-impact
