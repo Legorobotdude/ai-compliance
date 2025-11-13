@@ -1,6 +1,6 @@
 import type {
-  ComponentSupplier,
   Supplier,
+  SupplierContact,
   SupplierRequest,
   TenantID,
   UUID
@@ -11,27 +11,71 @@ export interface ScorecardRequest {
   supplierId: UUID;
 }
 
+export type SupplierRequestTone = 'formal' | 'neutral' | 'friendly';
+
+export interface SupplierEmailDraft {
+  subject: string;
+  body: string;
+  language: string;
+  dueDate: string;
+  uploadUrl: string;
+}
+
+export interface SupplierBlockedPart {
+  bomId: UUID;
+  bomExternalId: string;
+  partNumber: string;
+  assemblyId: string;
+  assemblyName?: string | null;
+  reason: 'MISSING' | 'EXPIRED' | 'OVER_LIMIT' | 'VALUE_MISSING';
+}
+
+export interface SupplierScorecardStats {
+  complianceRate: number;
+  targetResponseDays: number;
+  actualResponseDays?: number | null;
+  openRequests: number;
+  dueSoon: number;
+  slaBreaches: number;
+  lastRequestAt?: string | null;
+}
+
+export interface SupplierProfile extends Supplier {
+  contacts: SupplierContact[];
+}
+
+export interface SupplierRequestSummary {
+  id: UUID;
+  bomId: UUID;
+  bomExternalId: string;
+  status: SupplierRequest['status'];
+  sentAt?: string | null;
+  dueAt?: string | null;
+  responseAt?: string | null;
+}
+
 export interface ScorecardResponse {
-  supplier: Supplier;
-  requestsOpen: number;
-  avgResponseDays: number;
-  lastRequest?: string | null;
-  blockedParts: Array<{ partNumber: string; assemblyId: string; reason: string }>;
+  supplier: SupplierProfile;
+  stats: SupplierScorecardStats;
+  blockedParts: SupplierBlockedPart[];
+  recentRequests: SupplierRequestSummary[];
 }
 
 export interface SupplierRequestInput {
   tenantId: TenantID;
   supplierId: UUID;
   bomId: UUID;
-  dueAt: string;
   requestedBy: UUID;
+  dueAt?: string;
+  tone?: SupplierRequestTone;
+  languageOverride?: string;
 }
 
-export interface SupplierRequestWithContacts extends SupplierRequest {
-  contacts: Array<{ name: string; email: string }>;
-}
-
-export interface SupplierLocalizationContext {
-  supplier: Supplier;
-  components: ComponentSupplier[];
+export interface SupplierRequestResult {
+  requestId: UUID;
+  status: SupplierRequest['status'];
+  dueAt: string;
+  blockedParts: SupplierBlockedPart[];
+  emailDraft: SupplierEmailDraft;
+  workflowScheduled: boolean;
 }

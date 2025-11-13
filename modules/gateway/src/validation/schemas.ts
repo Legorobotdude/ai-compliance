@@ -19,8 +19,10 @@ export const supplierRequestSchema = z
     tenantId: z.string().min(1),
     supplierId: uuid(),
     bomId: uuid(),
-    dueAt: z.string().min(1),
-    requestedBy: uuid()
+    requestedBy: uuid(),
+    dueAt: z.string().min(1).optional(),
+    tone: z.enum(['formal', 'neutral', 'friendly']).optional(),
+    languageOverride: z.string().min(2).max(5).optional()
   })
   .strict() satisfies z.ZodType<SupplierRequestInput>;
 

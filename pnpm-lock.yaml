@@ -286,9 +286,15 @@ importers:
 
   modules/supplier:
     dependencies:
+      '@certivo/cora':
+        specifier: workspace:*
+        version: link:../cora
       '@certivo/lib-db':
         specifier: workspace:*
         version: link:../../libs/db
+      '@certivo/lib-logging':
+        specifier: workspace:*
+        version: link:../../libs/logging
 
 packages:
 

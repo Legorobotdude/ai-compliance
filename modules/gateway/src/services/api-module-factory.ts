@@ -24,6 +24,10 @@ export interface ApiModuleOptions {
     apiKey?: string;
     timeoutMs?: number;
   };
+  supplier?: {
+    uploadPortalUrl?: string;
+    recentRequestsLimit?: number;
+  };
   documents?: {
     localRoot?: string;
     publicBaseUrl?: string;
@@ -72,7 +76,15 @@ export class ApiModuleFactory {
     const complianceController = new ComplianceController(complianceService);
 
     const supplierRepo = new SupplierRepository(options.db);
-    const supplierService = new SupplierService(supplierRepo);
+    const supplierUploadUrl =
+      options.supplier?.uploadPortalUrl ??
+      process.env.SUPPLIER_UPLOAD_URL ??
+      `${documentsBaseUrl.replace(/\/$/, '')}/supplier/upload`;
+    const supplierService = new SupplierService(supplierRepo, {
+      coraService,
+      uploadPortalUrl: supplierUploadUrl,
+      recentRequestsLimit: options.supplier?.recentRequestsLimit
+    });
     const supplierController = new SupplierController(supplierService);
 
     const riskRepo = new RiskRepository(options.db);

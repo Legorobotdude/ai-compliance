@@ -45,6 +45,13 @@ export interface ComponentSupplier extends Timestamped {
   sourcingType?: 'PRIMARY' | 'SECONDARY' | 'CONTRACT';
 }
 
+export interface SupplierContact extends Timestamped {
+  id: UUID;
+  supplierId: UUID;
+  email: string;
+  name?: string | null;
+}
+
 export interface Supplier extends Timestamped {
   id: UUID;
   tenantId: TenantID;
@@ -60,6 +67,7 @@ export interface SupplierRequest extends Timestamped {
   tenantId: TenantID;
   supplierId: UUID;
   bomId: UUID;
+  requestedBy?: UUID | null;
   status: 'PENDING' | 'SENT' | 'RESPONDED' | 'ESCALATED' | 'CLOSED';
   sentAt?: string | null;
   dueAt?: string | null;

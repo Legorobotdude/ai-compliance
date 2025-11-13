@@ -11,6 +11,8 @@
     "test": "echo 'TODO: add tests' && exit 0"
   },
   "dependencies": {
-    "@certivo/lib-db": "workspace:*"
+    "@certivo/lib-db": "workspace:*",
+    "@certivo/cora": "workspace:*",
+    "@certivo/lib-logging": "workspace:*"
   }
 }

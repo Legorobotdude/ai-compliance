@@ -35,6 +35,12 @@ export default async function DashboardPage() {
             Documents
           </Link>
           <Link
+            href="/supplier"
+            className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
+          >
+            Supplier lab
+          </Link>
+          <Link
             href="/compliance"
             className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
           >
@@ -45,6 +51,12 @@ export default async function DashboardPage() {
             className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
           >
             Risk/Impact
+          </Link>
+          <Link
+            href="/cora"
+            className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
+          >
+            CORA
           </Link>
           <Link
             href="/lab"
