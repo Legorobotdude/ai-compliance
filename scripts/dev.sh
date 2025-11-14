@@ -23,6 +23,10 @@ export CORA_OPENAI_MODEL="${CORA_OPENAI_MODEL:-gpt-4o-mini}"
 export DOCUMENTS_LOCAL_ROOT="${DOCUMENTS_LOCAL_ROOT:-${ROOT_DIR}/.certivo/documents}"
 export DOCUMENTS_PUBLIC_BASE_URL="${DOCUMENTS_PUBLIC_BASE_URL:-${CERTIVO_API_URL}}"
 export DOCUMENTS_SIGNING_SECRET="${DOCUMENTS_SIGNING_SECRET:-${AUTH_JWT_SECRET:-dev-docs-secret}}"
+export TEMPORAL_ADDRESS="${TEMPORAL_ADDRESS:-localhost:7233}"
+export TEMPORAL_NAMESPACE="${TEMPORAL_NAMESPACE:-default}"
+export TEMPORAL_SUPPLIER_TASK_QUEUE="${TEMPORAL_SUPPLIER_TASK_QUEUE:-supplier-workflows}"
+export TEMPORAL_INGESTION_TASK_QUEUE="${TEMPORAL_INGESTION_TASK_QUEUE:-ingestion-retries}"
 mkdir -p "${DOCUMENTS_LOCAL_ROOT}"
 
 if [[ -z "${CERTIVO_API_TOKEN:-}" ]]; then
@@ -39,14 +43,15 @@ if [[ -z "${CORA_OPENAI_API_KEY:-}" ]]; then
   exit 1
 fi
 
-echo "🚀 Starting API, Web, and CORA sidecar..."
+echo "🚀 Starting API, Web, CORA sidecar, and Temporal worker..."
 cd "${ROOT_DIR}"
 echo "🛠️  Building workspace packages..."
 pnpm build >/dev/null
 pnpm dlx concurrently \
   --kill-others-on-fail \
-  --names "api,web,cora" \
-  --prefix-colors "cyan,green,magenta" \
+  --names "api,web,cora,worker" \
+  --prefix-colors "cyan,green,magenta,blue" \
   "pnpm --filter @certivo/api run dev" \
   "pnpm --filter @certivo/web dev" \
-  "cd apps/cora && uv run cora --reload"
+  "cd apps/cora && uv run cora --reload" \
+  "pnpm --filter @certivo/worker run dev"

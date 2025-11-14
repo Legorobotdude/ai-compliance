@@ -4,6 +4,7 @@ export interface SupplierWorkflowTrigger {
   tenantId: TenantID;
   supplierId: UUID;
   bomId: UUID;
+  requestId: UUID;
   dueAt: string;
 }
 

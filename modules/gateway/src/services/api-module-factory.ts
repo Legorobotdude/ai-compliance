@@ -2,7 +2,12 @@ import type { DatabaseClient } from '@certivo/lib-db';
 import { join } from 'node:path';
 import { LocalFileStorage } from '@certivo/lib-storage';
 import { ComplianceController, ComplianceRepository, ComplianceService } from '@certivo/compliance';
-import { SupplierController, SupplierRepository, SupplierService } from '@certivo/supplier';
+import {
+  SupplierController,
+  SupplierRepository,
+  SupplierService,
+  type SupplierWorkflowScheduler
+} from '@certivo/supplier';
 import { RiskImpactController, RiskImpactService, RiskRepository } from '@certivo/risk-impact';
 import {
   DocumentController,
@@ -80,10 +85,25 @@ export class ApiModuleFactory {
       options.supplier?.uploadPortalUrl ??
       process.env.SUPPLIER_UPLOAD_URL ??
       `${documentsBaseUrl.replace(/\/$/, '')}/supplier/upload`;
+    const workflowRepo = new WorkflowRepository(options.db);
+    const workflowService = new WorkflowService(workflowRepo, options.workflowClient);
+    const supplierWorkflowScheduler: SupplierWorkflowScheduler = {
+      async scheduleSupplierRequest(trigger) {
+        await workflowService.queueSupplierWorkflow({
+          tenantId: trigger.tenantId,
+          supplierId: trigger.supplierId,
+          bomId: trigger.bomId,
+          dueAt: trigger.dueAt,
+          requestId: trigger.requestId
+        });
+      }
+    };
+
     const supplierService = new SupplierService(supplierRepo, {
       coraService,
       uploadPortalUrl: supplierUploadUrl,
-      recentRequestsLimit: options.supplier?.recentRequestsLimit
+      recentRequestsLimit: options.supplier?.recentRequestsLimit,
+      workflowScheduler: supplierWorkflowScheduler
     });
     const supplierController = new SupplierController(supplierService);
 
@@ -98,11 +118,6 @@ export class ApiModuleFactory {
     const dashboardRepo = new DashboardRepository(options.db);
     const dashboardService = new DashboardService(dashboardRepo, riskService);
     const dashboardController = new DashboardController(dashboardService);
-
-    const workflowRepo = new WorkflowRepository(options.db);
-    const workflowService = new WorkflowService(workflowRepo, options.workflowClient);
-    // Workflow service is returned for worker wiring but not required by ApiController at the moment.
-    void workflowService;
 
     const coraController = new CoraController(coraService);
 

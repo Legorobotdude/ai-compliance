@@ -6,12 +6,15 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
+    "dev": "pnpm run build && node dist/main.js",
     "build": "tsc -b",
     "lint": "eslint \"src/**/*.ts\"",
-    "test": "echo 'TODO: add tests' && exit 0"
+    "test": "echo 'TODO: add tests' && exit 0",
+    "start": "node dist/main.js"
   },
   "dependencies": {
     "@certivo/jobs-workflows": "workspace:*",
-    "@certivo/lib-db": "workspace:*"
+    "@certivo/lib-db": "workspace:*",
+    "@certivo/lib-logging": "workspace:*"
   }
 }

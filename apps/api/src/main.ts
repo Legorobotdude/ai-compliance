@@ -25,7 +25,11 @@ import type { DocumentController, UploadRequest } from '@certivo/file-document';
 import type { ImpactPredictRequest } from '@certivo/risk-impact';
 import type { SupplierRequestInput } from '@certivo/supplier';
 import type { AiParseDocumentRequest, AiRiskSummaryRequest, AiSupplierEmailRequest } from '@certivo/cora';
-import type { WorkflowClient, IngestionRetryTrigger, SupplierWorkflowTrigger } from '@certivo/jobs-workflows';
+import {
+  createTemporalWorkflowClient,
+  type TemporalClientRuntime,
+  type WorkflowTaskQueues
+} from '@certivo/jobs-workflows';
 import {
   createPgDatabaseClient,
   runWithTenantContext,
@@ -62,23 +66,36 @@ const DOCUMENTS_DOWNLOAD_TTL_MS = process.env.DOCUMENTS_DOWNLOAD_TTL_MS
   : undefined;
 const DOCUMENTS_LOCAL_ROOT =
   process.env.DOCUMENTS_LOCAL_ROOT ?? join(process.cwd(), '..', '..', '.certivo', 'documents');
+
+const TEMPORAL_ADDRESS = process.env.TEMPORAL_ADDRESS;
+const TEMPORAL_NAMESPACE = process.env.TEMPORAL_NAMESPACE;
+const TEMPORAL_SUPPLIER_TASK_QUEUE = process.env.TEMPORAL_SUPPLIER_TASK_QUEUE;
+const TEMPORAL_INGESTION_TASK_QUEUE = process.env.TEMPORAL_INGESTION_TASK_QUEUE;
 type MetricLabel = 'method' | 'route' | 'status';
-
-class NoopWorkflowClient implements WorkflowClient {
-  async scheduleSupplierWorkflow(_trigger: SupplierWorkflowTrigger): Promise<void> {
-    // Intentionally noop for MVP bootstrap
-  }
-
-  async scheduleIngestionRetry(_trigger: IngestionRetryTrigger): Promise<void> {
-    // Intentionally noop for MVP bootstrap
-  }
-}
 
 export async function startApiServer(): Promise<void> {
   const { db, pool } = createPgDatabaseClient({ connectionString: DATABASE_URL });
   const logger = createLogger({ name: 'certivo-api' });
   const metrics = createApiMetrics();
-  const workflowClient = new NoopWorkflowClient();
+  let workflowRuntime: TemporalClientRuntime | null = null;
+  try {
+    const taskQueues: Partial<WorkflowTaskQueues> = {};
+    if (TEMPORAL_SUPPLIER_TASK_QUEUE) {
+      taskQueues.supplier = TEMPORAL_SUPPLIER_TASK_QUEUE;
+    }
+    if (TEMPORAL_INGESTION_TASK_QUEUE) {
+      taskQueues.ingestion = TEMPORAL_INGESTION_TASK_QUEUE;
+    }
+    workflowRuntime = await createTemporalWorkflowClient({
+      address: TEMPORAL_ADDRESS,
+      namespace: TEMPORAL_NAMESPACE,
+      taskQueues
+    });
+  } catch (error) {
+    logger.error({ err: error }, 'api.temporal_connection_failed');
+    throw error;
+  }
+  const workflowClient = workflowRuntime.client;
   if (!CORA_API_URL) {
     logger.error('CORA_API_URL must be set to reach the AI sidecar.');
     process.exit(1);
@@ -130,6 +147,9 @@ export async function startApiServer(): Promise<void> {
   const shutdown = async () => {
     logger.info('Shutting down API server');
     server.close();
+    if (workflowRuntime) {
+      await workflowRuntime.shutdown();
+    }
     await pool.end();
     process.exit(0);
   };

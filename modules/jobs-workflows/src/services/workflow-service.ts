@@ -10,7 +10,10 @@ export class WorkflowService {
   constructor(private readonly repo: WorkflowRepository, private readonly client: WorkflowClient) {}
 
   async queueSupplierWorkflow(trigger: SupplierWorkflowTrigger) {
-    await this.repo.logWorkflowEvent(trigger.tenantId, 'SupplierRequestWorkflow', trigger);
+    await this.repo.logWorkflowEvent(trigger.tenantId, 'SUPPLIER_REQUEST', {
+      event: 'SupplierRequestWorkflow.REQUESTED',
+      trigger
+    });
     await this.client.scheduleSupplierWorkflow(trigger);
   }
 
