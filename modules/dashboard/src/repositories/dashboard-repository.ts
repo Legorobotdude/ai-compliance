@@ -72,6 +72,24 @@ type SlaAggregateRecord = {
   escalations: number;
 };
 
+type WorkflowEventType = 'SUPPLIER_REQUEST' | 'INGESTION' | 'IMPACT' | 'LLM' | 'SYSTEM';
+
+type WorkflowEventRecord = {
+  id: UUID;
+  workflow: WorkflowEventType;
+  payload: Record<string, unknown> | null;
+  createdAt: string;
+  requestId: UUID | null;
+  issueId: UUID | null;
+  supplierId: UUID | null;
+  supplierName: string | null;
+  requestStatus: string | null;
+  dueAt: string | null;
+  issueCode: string | null;
+  issueStatus: string | null;
+  issuePartNumber: string | null;
+};
+
 export class DashboardRepository {
   constructor(private readonly db: DatabaseClient) {}
 
@@ -252,6 +270,41 @@ export class DashboardRepository {
         from audit_logs al
         where al.tenant_id = $1
         order by al.created_at desc
+        limit $2
+      `,
+      values: [tenantId, limit]
+    });
+  }
+
+  async listWorkflowEvents(tenantId: TenantID, limit: number): Promise<WorkflowEventRecord[]> {
+    return this.db.query<WorkflowEventRecord>({
+      text: `
+        select
+          we.id,
+          we.workflow,
+          we.payload,
+          we.created_at as "createdAt",
+          (we.payload->'trigger'->>'requestId')::uuid as "requestId",
+          (we.payload->'trigger'->>'issueId')::uuid as "issueId",
+          sr.supplier_id as "supplierId",
+          s.name as "supplierName",
+          sr.status as "requestStatus",
+          sr.due_at as "dueAt",
+          ii.code as "issueCode",
+          ii.status as "issueStatus",
+          ii.part_number as "issuePartNumber"
+        from workflow_events we
+        left join supplier_requests sr
+          on sr.tenant_id = we.tenant_id
+         and sr.id = (we.payload->'trigger'->>'requestId')::uuid
+        left join suppliers s
+          on s.tenant_id = sr.tenant_id
+         and s.id = sr.supplier_id
+        left join ingestion_issues ii
+          on ii.tenant_id = we.tenant_id
+         and ii.id = (we.payload->'trigger'->>'issueId')::uuid
+        where we.tenant_id = $1
+        order by we.created_at desc
         limit $2
       `,
       values: [tenantId, limit]

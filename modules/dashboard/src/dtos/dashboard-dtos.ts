@@ -25,6 +25,7 @@ export interface DashboardSnapshotDto {
   auditLogs: AuditLogEntryDto[];
   ingestionIssues: OpsIssueDto[];
   slaLeaderboard: SlaLeaderboardEntryDto[];
+  workflowJobs: WorkflowJobDto[];
 }
 
 export interface DashboardBomRow {
@@ -77,6 +78,31 @@ export interface AuditLogEntryDto {
   summary: string;
   meta?: AuditLogMeta;
   createdAt: string;
+}
+
+export type WorkflowJobType = 'SUPPLIER_REQUEST' | 'INGESTION';
+
+export type WorkflowJobStatus = 'QUEUED' | 'RUNNING' | 'WAITING' | 'ESCALATED' | 'RETRYING';
+
+export interface WorkflowJobMeta {
+  supplierId?: UUID | null;
+  supplierName?: string | null;
+  requestStatus?: string | null;
+  dueAt?: string | null;
+  issueCode?: string | null;
+  issueStatus?: string | null;
+  issuePartNumber?: string | null;
+}
+
+export interface WorkflowJobDto {
+  id: UUID;
+  workflow: WorkflowJobType;
+  status: WorkflowJobStatus;
+  step: string;
+  target: string;
+  startedAt: string;
+  updatedAt: string;
+  meta?: WorkflowJobMeta;
 }
 
 export interface OpsIssueDto {

@@ -44,6 +44,7 @@
 - Added Certivo API env helpers plus docs for `CERTIVO_API_URL`/`CERTIVO_API_TOKEN` so `pnpm --filter @certivo/web dev|build` knows how to authenticate against the Express gateway.
 
 ## Recent updates
+- Added the Ops Center experience per Architecture.md §§6–7: extended `@certivo/dashboard` to derive a `workflowJobs` payload from `workflow_events` (supplier + ingestion Temporal traces), wired the Express snapshot endpoint through to Next.js, built a dedicated `/ops-center` page with the new RunningJobs panel plus consolidated audit/ingestion/SLA widgets, and linked it from the main dashboard.
 - Corrected the dev JWT generator (`infra/docker/generate-dev-token.mjs`) to emit HS256 signatures without double-encoding so Architecture.md §7 auth flows accept tokens in local dashboard sessions again.
 - Bootstrapped the local dev runtime: brought up Docker Compose services, ran `pnpm db:migrate`/`pnpm db:seed`, generated the seed tenant JWT, and launched the API (`node dist/main.js`) plus web (`pnpm dev`) with `CERTIVO_API_URL`/`CERTIVO_API_TOKEN` configured. Noted a `/dashboard/snapshot` 500 caused by `impact_scenarios` JSON insertion (see API logs) while verifying the dash fetch.
 - Patched `RiskRepository.recordScenarioResult` to persist structured JSON (regulation metadata + deltas) and rebuilt/restarted services, restoring `/dashboard/snapshot` and the Next.js dashboard to 200 responses.

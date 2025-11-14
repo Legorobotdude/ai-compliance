@@ -64,6 +64,12 @@ export default async function DashboardPage() {
           >
             Testing Lab
           </Link>
+          <Link
+            href="/ops-center"
+            className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
+          >
+            Ops Center
+          </Link>
           <RoleSwitcher />
         </div>
       </header>

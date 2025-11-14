@@ -7,7 +7,9 @@ import type {
   SupplierScorecardSnapshot,
   AuditLogEntryDto,
   OpsIssueDto,
-  SlaLeaderboardEntryDto
+  SlaLeaderboardEntryDto,
+  WorkflowJobDto,
+  WorkflowJobMeta
 } from '../dtos/dashboard-dtos';
 import { DashboardRepository } from '../repositories/dashboard-repository';
 
@@ -17,6 +19,8 @@ export interface DashboardServiceOptions {
   issueLimit?: number;
   defaultImpactRegulation?: string;
   defaultImpactLimitPpm?: number;
+  workflowEventLimit?: number;
+  workflowJobLimit?: number;
 }
 
 export class DashboardService {
@@ -25,6 +29,8 @@ export class DashboardService {
   private readonly issueLimit: number;
   private readonly defaultImpactRegulation: string;
   private readonly defaultImpactLimitPpm: number;
+  private readonly workflowEventLimit: number;
+  private readonly workflowJobLimit: number;
 
   constructor(
     private readonly repository: DashboardRepository,
@@ -36,6 +42,8 @@ export class DashboardService {
     this.issueLimit = options?.issueLimit ?? 8;
     this.defaultImpactRegulation = options?.defaultImpactRegulation ?? 'PFAS';
     this.defaultImpactLimitPpm = options?.defaultImpactLimitPpm ?? 100;
+    this.workflowEventLimit = options?.workflowEventLimit ?? 40;
+    this.workflowJobLimit = options?.workflowJobLimit ?? 6;
   }
 
   async getSnapshot(params: { tenantId: TenantID; bomId?: UUID }): Promise<DashboardSnapshotDto> {
@@ -50,7 +58,7 @@ export class DashboardService {
     }
 
     const bomId = params.bomId ?? bomMeta.id;
-    const [bomRows, statusCounts, suppliers, requestDurations, auditLogs, issues, slaAggregates] =
+    const [bomRows, statusCounts, suppliers, requestDurations, auditLogs, issues, slaAggregates, workflowEvents] =
       await Promise.all([
       this.repository.fetchBomRows(tenantId, bomId),
       this.repository.fetchStatusCounts(tenantId, bomId),
@@ -58,7 +66,8 @@ export class DashboardService {
       this.repository.listSupplierRequestDurations(tenantId),
       this.repository.listAuditLogs(tenantId, this.auditLogLimit),
       this.repository.listIngestionIssues(tenantId, this.issueLimit),
-      this.repository.listSlaAggregates(tenantId)
+      this.repository.listSlaAggregates(tenantId),
+      this.repository.listWorkflowEvents(tenantId, this.workflowEventLimit)
       ]);
 
     const bomItems = this.mapBomRows(bomRows);
@@ -100,6 +109,7 @@ export class DashboardService {
         escalations: row.escalations
       };
     });
+    const workflowJobs = this.buildWorkflowJobs(workflowEvents);
 
     return {
       tenantId,
@@ -119,7 +129,8 @@ export class DashboardService {
       auditLogs: auditEntries,
       ingestionIssues: opsIssues,
       slaLeaderboard,
-      riskDataFreshness
+      riskDataFreshness,
+      workflowJobs
     };
   }
 
@@ -303,6 +314,194 @@ export class DashboardService {
     return entries.slice(0, 3).join(', ');
   }
 
+  private buildWorkflowJobs(
+    events: Awaited<ReturnType<DashboardRepository['listWorkflowEvents']>>
+  ): WorkflowJobDto[] {
+    if (!events.length) {
+      return [];
+    }
+    const sorted = [...events].reverse();
+    const groups = new Map<string, WorkflowJobAccumulator>();
+    for (const event of sorted) {
+      if (!this.isSupportedWorkflow(event.workflow)) {
+        continue;
+      }
+      const referenceId = this.resolveWorkflowReference(event);
+      if (!referenceId) {
+        continue;
+      }
+      const key = `${event.workflow}:${referenceId}`;
+      let accumulator = groups.get(key);
+      if (!accumulator) {
+        accumulator = {
+          workflow: event.workflow,
+          referenceId,
+          startedAt: event.createdAt,
+          updatedAt: event.createdAt,
+          events: [],
+          meta: {}
+        };
+        groups.set(key, accumulator);
+      }
+      accumulator.meta = this.mergeWorkflowMeta(accumulator.meta, event);
+      accumulator.events.push({
+        name: this.extractWorkflowEventName(event),
+        createdAt: event.createdAt
+      });
+      accumulator.updatedAt = event.createdAt;
+    }
+    const activeJobs: WorkflowJobDto[] = [];
+    for (const accumulator of groups.values()) {
+      if (this.isWorkflowJobComplete(accumulator)) {
+        continue;
+      }
+      activeJobs.push(this.toWorkflowJobDto(accumulator));
+    }
+    activeJobs.sort((a, b) => {
+      const aTime = Date.parse(a.updatedAt);
+      const bTime = Date.parse(b.updatedAt);
+      if (Number.isFinite(aTime) && Number.isFinite(bTime)) {
+        return bTime - aTime;
+      }
+      return String(b.updatedAt).localeCompare(String(a.updatedAt));
+    });
+    return activeJobs.slice(0, this.workflowJobLimit);
+  }
+
+  private isSupportedWorkflow(
+    workflow: Awaited<ReturnType<DashboardRepository['listWorkflowEvents']>>[number]['workflow']
+  ): workflow is WorkflowJobDto['workflow'] {
+    return workflow === 'SUPPLIER_REQUEST' || workflow === 'INGESTION';
+  }
+
+  private resolveWorkflowReference(
+    event: Awaited<ReturnType<DashboardRepository['listWorkflowEvents']>>[number]
+  ): UUID | null {
+    if (event.workflow === 'SUPPLIER_REQUEST') {
+      return (event.requestId as UUID | null) ?? this.extractTriggerUuid(event.payload, 'requestId');
+    }
+    if (event.workflow === 'INGESTION') {
+      return (event.issueId as UUID | null) ?? this.extractTriggerUuid(event.payload, 'issueId');
+    }
+    return null;
+  }
+
+  private extractTriggerUuid(payload: Record<string, unknown> | null, key: string): UUID | null {
+    if (!payload || typeof payload !== 'object') {
+      return null;
+    }
+    const trigger = (payload as Record<string, unknown>)['trigger'];
+    if (!trigger || typeof trigger !== 'object') {
+      return null;
+    }
+    const value = (trigger as Record<string, unknown>)[key];
+    return typeof value === 'string' ? (value as UUID) : null;
+  }
+
+  private mergeWorkflowMeta(
+    current: WorkflowJobMeta,
+    event: Awaited<ReturnType<DashboardRepository['listWorkflowEvents']>>[number]
+  ): WorkflowJobMeta {
+    return {
+      supplierId: event.supplierId ?? current.supplierId,
+      supplierName: event.supplierName ?? current.supplierName,
+      requestStatus: event.requestStatus ?? current.requestStatus,
+      dueAt: event.dueAt ?? current.dueAt,
+      issueCode: event.issueCode ?? current.issueCode,
+      issueStatus: event.issueStatus ?? current.issueStatus,
+      issuePartNumber: event.issuePartNumber ?? current.issuePartNumber
+    };
+  }
+
+  private extractWorkflowEventName(
+    event: Awaited<ReturnType<DashboardRepository['listWorkflowEvents']>>[number]
+  ): string {
+    const payload = event.payload;
+    if (payload && typeof payload === 'object') {
+      const eventName = (payload as Record<string, unknown>)['event'];
+      if (typeof eventName === 'string') {
+        return eventName;
+      }
+    }
+    return `${event.workflow}.UNKNOWN`;
+  }
+
+  private isWorkflowJobComplete(accumulator: WorkflowJobAccumulator): boolean {
+    return accumulator.events.some((event) => this.isTerminalWorkflowEvent(accumulator.workflow, event.name));
+  }
+
+  private isTerminalWorkflowEvent(workflow: WorkflowJobDto['workflow'], eventName: string): boolean {
+    if (workflow === 'SUPPLIER_REQUEST') {
+      return eventName.endsWith('COMPLETED');
+    }
+    if (workflow === 'INGESTION') {
+      return eventName.endsWith('RESOLVED');
+    }
+    return false;
+  }
+
+  private toWorkflowJobDto(accumulator: WorkflowJobAccumulator): WorkflowJobDto {
+    const lastEvent = accumulator.events[accumulator.events.length - 1];
+    const stepName = lastEvent?.name ?? `${accumulator.workflow}.RUNNING`;
+    return {
+      id: accumulator.referenceId,
+      workflow: accumulator.workflow,
+      status: this.mapWorkflowStatus(accumulator.workflow, stepName),
+      step: this.formatWorkflowStep(stepName),
+      target: this.formatWorkflowTarget(accumulator),
+      startedAt: accumulator.startedAt,
+      updatedAt: accumulator.updatedAt,
+      meta: accumulator.meta
+    };
+  }
+
+  private formatWorkflowTarget(accumulator: WorkflowJobAccumulator): string {
+    if (accumulator.workflow === 'SUPPLIER_REQUEST') {
+      return accumulator.meta?.supplierName ?? `Supplier ${accumulator.referenceId.slice(0, 8)}`;
+    }
+    if (accumulator.workflow === 'INGESTION') {
+      if (accumulator.meta?.issueCode) {
+        const part = accumulator.meta.issuePartNumber ? ` · ${accumulator.meta.issuePartNumber}` : '';
+        return `${accumulator.meta.issueCode}${part}`;
+      }
+      return `Ingestion issue ${accumulator.referenceId.slice(0, 8)}`;
+    }
+    return `Workflow ${accumulator.referenceId.slice(0, 8)}`;
+  }
+
+  private mapWorkflowStatus(
+    workflow: WorkflowJobDto['workflow'],
+    stepName: string
+  ): WorkflowJobDto['status'] {
+    if (workflow === 'SUPPLIER_REQUEST') {
+      if (stepName.endsWith('ESCALATED')) {
+        return 'ESCALATED';
+      }
+      if (stepName.endsWith('SENT')) {
+        return 'WAITING';
+      }
+      if (stepName.endsWith('REQUESTED') || stepName.endsWith('QUEUED')) {
+        return 'QUEUED';
+      }
+      return 'RUNNING';
+    }
+    if (workflow === 'INGESTION') {
+      if (stepName.endsWith('RETRY')) {
+        return 'RETRYING';
+      }
+      if (stepName.endsWith('QUEUED')) {
+        return 'QUEUED';
+      }
+      return 'RUNNING';
+    }
+    return 'RUNNING';
+  }
+
+  private formatWorkflowStep(stepName: string): string {
+    const parts = stepName.split('.');
+    return parts[parts.length - 1] ?? stepName;
+  }
+
   private mapBomRows(rows: Awaited<ReturnType<DashboardRepository['fetchBomRows']>>): DashboardBomRow[] {
     return rows.map((row) => ({
       bomId: row.bomId,
@@ -382,6 +581,15 @@ export class DashboardService {
     });
   }
 }
+
+type WorkflowJobAccumulator = {
+  workflow: WorkflowJobDto['workflow'];
+  referenceId: UUID;
+  startedAt: string;
+  updatedAt: string;
+  events: Array<{ name: string; createdAt: string }>;
+  meta: WorkflowJobMeta;
+};
 
 function mapIssueSeverity(code: string, status: string): OpsIssueDto['severity'] {
   if (code === 'SUPPLIER_MISSING' || code === 'VALUE_MISSING') {
