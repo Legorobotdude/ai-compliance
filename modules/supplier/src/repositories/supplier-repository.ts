@@ -1,4 +1,5 @@
 import type {
+  AuditLogInsert,
   DatabaseClient,
   Supplier,
   SupplierContact,
@@ -34,14 +35,6 @@ export interface LlmCallRecord {
   outputJson?: Record<string, unknown>;
   model: string;
   latencyMs: number;
-}
-
-export interface AuditLogRecordInput {
-  tenantId: TenantID;
-  actorUserId?: UUID | null;
-  action: string;
-  target: string;
-  payload?: Record<string, unknown>;
 }
 
 const SUPPLIER_COLUMNS = `
@@ -245,7 +238,7 @@ export class SupplierRepository {
     return rows[0] ?? null;
   }
 
-  async recordAuditLog(entry: AuditLogRecordInput): Promise<void> {
+  async recordAuditLog(entry: AuditLogInsert): Promise<void> {
     await this.db.query({
       text: `
         insert into audit_logs (tenant_id, actor_user_id, action, target, payload_json)

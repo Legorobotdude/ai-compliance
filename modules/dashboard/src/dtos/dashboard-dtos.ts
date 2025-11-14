@@ -51,12 +51,31 @@ export interface SupplierScorecardSnapshot {
   lastRequest?: string | null;
 }
 
+export type AuditLogCategory = 'COMPLIANCE' | 'SUPPLIER' | 'LLM' | 'WORKFLOW' | 'SYSTEM' | 'OTHER';
+
+export interface AuditLogMeta {
+  latencyMs?: number;
+  outcome?: 'SUCCESS' | 'RETRY' | 'FAILED';
+  dueAt?: string;
+  status?: string;
+  promptHash?: string;
+  issuesSummary?: string;
+  blockedParts?: number;
+  findings?: number;
+  validUntil?: string | null;
+  docRef?: string;
+  schema?: string;
+  bomId?: string;
+  supplierId?: string;
+}
+
 export interface AuditLogEntryDto {
   id: UUID;
-  promptHash: string;
-  model: string;
-  latencyMs: number;
-  outcome: 'SUCCESS' | 'RETRY' | 'FAILED';
+  action: string;
+  target: string;
+  category: AuditLogCategory;
+  summary: string;
+  meta?: AuditLogMeta;
   createdAt: string;
 }
 

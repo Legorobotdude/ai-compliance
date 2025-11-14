@@ -77,14 +77,7 @@ export class DashboardService {
       this.riskService.listRecentImpactScenarios(tenantId, 5),
       this.riskService.getRiskDataFreshness(tenantId)
     ]);
-    const auditEntries = auditLogs.map<AuditLogEntryDto>((log) => ({
-      id: log.id,
-      promptHash: log.promptHash,
-      model: log.model,
-      latencyMs: log.latencyMs,
-      outcome: log.outcome,
-      createdAt: log.createdAt
-    }));
+    const auditEntries = auditLogs.map((log) => this.mapAuditLogEntry(log));
     const opsIssues = issues.map<OpsIssueDto>((issue) => ({
       id: issue.id,
       bomId: issue.bomId,
@@ -128,6 +121,186 @@ export class DashboardService {
       slaLeaderboard,
       riskDataFreshness
     };
+  }
+
+  private mapAuditLogEntry(
+    log: Awaited<ReturnType<DashboardRepository['listAuditLogs']>>[number]
+  ): AuditLogEntryDto {
+    const category = this.resolveAuditCategory(log.action);
+    const { summary, meta } = this.buildAuditSummary(log);
+    return {
+      id: log.id,
+      action: log.action,
+      target: log.target,
+      category,
+      summary,
+      meta,
+      createdAt: log.createdAt
+    };
+  }
+
+  private resolveAuditCategory(action: string): AuditLogEntryDto['category'] {
+    const normalized = action.toLowerCase();
+    if (normalized.startsWith('compliance') || normalized.startsWith('document')) {
+      return 'COMPLIANCE';
+    }
+    if (
+      normalized.includes('supplier.email') ||
+      normalized.includes('supplier_email') ||
+      normalized.includes('llm') ||
+      normalized.includes('risk')
+    ) {
+      return 'LLM';
+    }
+    if (normalized.startsWith('supplier.request')) {
+      return 'WORKFLOW';
+    }
+    if (normalized.startsWith('supplier')) {
+      return 'SUPPLIER';
+    }
+    if (normalized.includes('workflow')) {
+      return 'WORKFLOW';
+    }
+    return 'OTHER';
+  }
+
+  private buildAuditSummary(
+    log: Awaited<ReturnType<DashboardRepository['listAuditLogs']>>[number]
+  ): { summary: string; meta?: AuditLogEntryDto['meta'] } {
+    const payload = (log.payload ?? {}) as Record<string, unknown>;
+    const getString = (...keys: string[]): string | undefined => {
+      for (const key of keys) {
+        const value = payload[key];
+        if (typeof value === 'string') {
+          return value;
+        }
+      }
+      return undefined;
+    };
+    const getNumber = (...keys: string[]): number | undefined => {
+      for (const key of keys) {
+        const value = payload[key];
+        if (typeof value === 'number') {
+          return value;
+        }
+      }
+      return undefined;
+    };
+    const getArrayLength = (key: string): number | undefined => {
+      const value = payload[key];
+      if (Array.isArray(value)) {
+        return value.length;
+      }
+      return undefined;
+    };
+
+    switch (log.action) {
+      case 'COMPLIANCE_BOM_UPLOADED': {
+        const assemblies = getNumber('assemblies', 'assemblyCount');
+        const components = getNumber('components', 'componentCount');
+        const issuesSummary = this.describeIssueSummary(payload['issues']);
+        const summary = `BOM upload captured ${assemblies ?? '—'} assemblies and ${components ?? '—'} components`;
+        return {
+          summary: issuesSummary ? `${summary} · Issues ${issuesSummary}` : summary,
+          meta: issuesSummary ? { issuesSummary } : undefined
+        };
+      }
+      case 'COMPLIANCE_CERT_UPLOADED': {
+        const partNumber = getString('partNumber');
+        const findings = getNumber('findings');
+        const validUntil = getString('validUntil');
+        const supplierId = getString('supplierId');
+        return {
+          summary: `Certificate recorded for ${partNumber ?? 'part'} (${findings ?? 0} findings)`,
+          meta: {
+            findings: findings ?? 0,
+            validUntil: validUntil ?? null,
+            supplierId
+          }
+        };
+      }
+      case 'DOCUMENT_PARSED': {
+        const schema = getString('schema');
+        const docRef = getString('doc_ref', 'docRef');
+        return {
+          summary: `Document parsed via schema ${schema ?? 'unknown'}`,
+          meta: {
+            schema,
+            docRef
+          }
+        };
+      }
+      case 'SUPPLIER_EMAIL_DRAFTED': {
+        const bomId = getString('bom_id', 'bomId');
+        const dueAt = getString('due_date', 'dueAt');
+        return {
+          summary: `CORA drafted supplier email${bomId ? ` for BOM ${bomId}` : ''}`,
+          meta: { bomId, dueAt }
+        };
+      }
+      case 'RISK_SUMMARY_GENERATED': {
+        const bomId = getString('bom_id', 'bomId');
+        return {
+          summary: `Risk summary generated${bomId ? ` for BOM ${bomId}` : ''}`,
+          meta: { bomId }
+        };
+      }
+      case 'supplier.request.created': {
+        const requestId = getString('requestId') ?? log.target;
+        const dueAt = getString('dueAt');
+        const blockedParts = getArrayLength('blockedParts');
+        return {
+          summary: `Supplier request ${requestId} created${dueAt ? ` (due ${dueAt})` : ''}`,
+          meta: { dueAt, blockedParts }
+        };
+      }
+      case 'supplier.request.status.sent':
+      case 'supplier.request.status.reminder':
+      case 'supplier.request.status.escalated':
+      case 'supplier.request.status.responded':
+      case 'supplier.request.status.closed': {
+        const requestId = getString('requestId') ?? log.target;
+        const status = getString('status') ?? log.action.split('.').pop()?.toUpperCase();
+        return {
+          summary: `Supplier request ${requestId} marked ${status ?? 'updated'}`,
+          meta: { status }
+        };
+      }
+      case 'supplier.email.llm_recorded': {
+        const bomId = getString('bomId');
+        const dueAt = getString('dueAt');
+        const latencyMs = getNumber('latencyMs');
+        const promptHash = getString('promptHash');
+        return {
+          summary: `Supplier email LLM call completed${latencyMs != null ? ` in ${latencyMs} ms` : ''}${
+            bomId ? ` (BOM ${bomId})` : ''
+          }`,
+          meta: {
+            latencyMs,
+            promptHash,
+            dueAt,
+            bomId,
+            outcome: 'SUCCESS'
+          }
+        };
+      }
+    }
+
+    const normalizedAction = log.action.replace(/_/g, ' ');
+    return { summary: normalizedAction.charAt(0).toUpperCase() + normalizedAction.slice(1) };
+  }
+
+  private describeIssueSummary(raw: unknown): string | undefined {
+    if (!raw || typeof raw !== 'object') {
+      return undefined;
+    }
+    const entries = Object.entries(raw as Record<string, unknown>)
+      .filter(([, value]) => typeof value === 'number')
+      .map(([code, value]) => `${code}:${value as number}`);
+    if (!entries.length) {
+      return undefined;
+    }
+    return entries.slice(0, 3).join(', ');
   }
 
   private mapBomRows(rows: Awaited<ReturnType<DashboardRepository['fetchBomRows']>>): DashboardBomRow[] {

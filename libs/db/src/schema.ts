@@ -179,6 +179,14 @@ export interface AuditLog extends Timestamped {
   payloadJson?: Record<string, unknown>;
 }
 
+export interface AuditLogInsert {
+  tenantId: TenantID;
+  actorUserId?: UUID | null;
+  action: string;
+  target: string;
+  payload?: Record<string, unknown>;
+}
+
 export interface LlmCall extends Timestamped {
   id: UUID;
   tenantId: TenantID;

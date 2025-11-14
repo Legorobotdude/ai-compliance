@@ -15,7 +15,7 @@ import type {
   SupplierRequestSummary,
   SupplierScorecardStats
 } from '../dtos/supplier-dtos.js';
-import type { BomSummary, SupplierRepository, SupplierRequestRecord } from '../repositories/supplier-repository.js';
+import type { BomSummary, SupplierRepository, SupplierRequestMetrics, SupplierRequestRecord } from '../repositories/supplier-repository.js';
 
 const DEFAULT_UPLOAD_URL = 'https://upload.certivo.local/portal';
 const DEFAULT_RECENT_REQUESTS_LIMIT = 5;
@@ -73,6 +73,7 @@ export class SupplierService {
       this.repository.listBlockedParts(request.tenantId, request.supplierId),
       this.repository.listRecentRequests(request.tenantId, request.supplierId, this.recentRequestsLimit)
     ]);
+    this.logSlowSupplier(request.tenantId, supplier.id, metrics, supplier);
 
     const profile: SupplierProfile = { ...supplier, contacts };
     const stats: SupplierScorecardStats = {
@@ -242,6 +243,26 @@ export class SupplierService {
       model: `cora:supplier-email:${draft.language}`,
       latencyMs
     });
+    await this.repository.recordAuditLog({
+      tenantId: context.tenantId,
+      action: 'supplier.email.llm_recorded',
+      target: `supplier:${context.supplier.id}`,
+      payload: {
+        bomId: context.bom.bomId,
+        promptHash,
+        latencyMs,
+        dueAt: context.dueAt
+      }
+    });
+    this.logger.info(
+      {
+        tenantId: context.tenantId,
+        supplierId: context.supplier.id,
+        bomId: context.bom.bomId,
+        latencyMs
+      },
+      'supplier.email.llm_recorded'
+    );
   }
 
   private hashEmailContext(context: {
@@ -326,6 +347,40 @@ export class SupplierService {
     const totalDays = turnaroundDays + REMINDER_BUFFER_DAYS;
     const dueDate = new Date(Date.now() + totalDays * 24 * 60 * 60 * 1000);
     return dueDate.toISOString();
+  }
+
+  private logSlowSupplier(
+    tenantId: TenantID,
+    supplierId: UUID,
+    metrics: SupplierRequestMetrics,
+    supplier: Supplier
+  ): void {
+    if (
+      metrics.avgResponseDays != null &&
+      supplier.responseAvgDays != null &&
+      metrics.avgResponseDays > supplier.responseAvgDays
+    ) {
+      this.logger.warn(
+        {
+          tenantId,
+          supplierId,
+          avgResponseDays: metrics.avgResponseDays,
+          targetResponseDays: supplier.responseAvgDays
+        },
+        'supplier.sla.slow_responder'
+      );
+    }
+    if (metrics.slaBreaches > 0) {
+      this.logger.warn(
+        {
+          tenantId,
+          supplierId,
+          slaBreaches: metrics.slaBreaches,
+          dueSoon: metrics.dueSoon
+        },
+        'supplier.sla.breaches_detected'
+      );
+    }
   }
 
   private async requireSupplier(tenantId: TenantID, supplierId: UUID): Promise<Supplier> {

@@ -62,7 +62,7 @@ export function CoraTelemetryPanel({ metrics }: { metrics: CoraTelemetryMetrics 
   return (
     <SectionCard
       title="CORA Telemetry"
-      description="Derived from Architecture.md §§4 & 7 guardrails — prompt hashing, retries, and latency budgets surfaced from llm_calls/audit_logs."
+      description="Architecture.md §§4 & 7 guardrails surfaced directly from audit_logs instrumentation (prompt hashes, retries, latency budgets)."
     >
       <div className="grid gap-4 md:grid-cols-3">
         {metricsConfig.map(({ key, label, format }) => (

@@ -1,4 +1,5 @@
 import type {
+  AuditLogInsert,
   Bom,
   BomComponent,
   BomSubassembly,
@@ -136,5 +137,15 @@ export class ComplianceRepository {
         ]
       });
     }
+  }
+
+  async recordAuditLog(entry: AuditLogInsert): Promise<void> {
+    await this.db.query({
+      text: `
+        insert into audit_logs (tenant_id, actor_user_id, action, target, payload_json)
+        values ($1,$2,$3,$4,$5::jsonb)
+      `,
+      values: [entry.tenantId, entry.actorUserId ?? null, entry.action, entry.target, entry.payload ?? null]
+    });
   }
 }

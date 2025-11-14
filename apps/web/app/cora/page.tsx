@@ -13,14 +13,18 @@ export const dynamic = "force-dynamic";
 export default async function CoraShowcasePage() {
   const snapshot = await fetchDashboardSnapshot();
   const auditEntries = snapshot.auditLogs ?? [];
-  const totalCalls = auditEntries.length;
-  const successCount = auditEntries.filter((entry) => entry.outcome === "SUCCESS").length;
-  const retryCount = auditEntries.filter((entry) => entry.outcome === "RETRY").length;
-  const failureCount = auditEntries.filter((entry) => entry.outcome === "FAILED").length;
+  const llmEntries = auditEntries.filter((entry) => entry.category === "LLM");
+  const totalCalls = llmEntries.length;
+  const successCount = llmEntries.filter((entry) => (entry.meta?.outcome ?? "SUCCESS") === "SUCCESS").length;
+  const retryCount = llmEntries.filter((entry) => entry.meta?.outcome === "RETRY").length;
+  const failureCount = llmEntries.filter((entry) => entry.meta?.outcome === "FAILED").length;
   const avgLatencyMs = totalCalls
-    ? auditEntries.reduce((sum, entry) => sum + entry.latencyMs, 0) / totalCalls
+    ? llmEntries.reduce(
+        (sum, entry) => sum + (typeof entry.meta?.latencyMs === "number" ? entry.meta.latencyMs : 0),
+        0
+      ) / totalCalls
     : 0;
-  const lastCallAt = auditEntries
+  const lastCallAt = llmEntries
     .slice()
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]?.createdAt;
 

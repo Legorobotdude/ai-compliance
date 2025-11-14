@@ -1,6 +1,8 @@
 import type { AiParseDocumentResponse, CoraService } from '@certivo/cora';
 import type { TenantID, UUID } from '@certivo/lib-db';
 import type { DocumentService } from '@certivo/file-document';
+import type { Logger } from '@certivo/lib-logging';
+import { createLogger } from '@certivo/lib-logging';
 import type {
   BomAssemblyInput,
   BomUploadRequest,
@@ -22,12 +24,21 @@ import { ComplianceRepository } from '../repositories/compliance-repository';
 import { BomIngestionError } from '../errors.js';
 import { extractAssembliesFromRequest } from './bom-ingestion-parser.js';
 
+interface ComplianceServiceOptions {
+  logger?: Logger;
+}
+
 export class ComplianceService {
+  private readonly logger: Logger;
+
   constructor(
     private readonly repo: ComplianceRepository,
     private readonly cora?: CoraService,
-    private readonly documents?: DocumentService
-  ) {}
+    private readonly documents?: DocumentService,
+    options: ComplianceServiceOptions = {}
+  ) {
+    this.logger = options.logger ?? createLogger({ name: 'compliance-service' });
+  }
 
   async ingestBom(request: BomUploadRequest): Promise<BomUploadResponse> {
     const issues: BomUploadResponse['issues'] = [];
@@ -46,6 +57,41 @@ export class ComplianceService {
 
     const bomId = await this.repo.createBom(persistable);
     await this.persistSupplierIssues(request.tenantId, bomId, supplierIssues);
+    const issueSummary = this.summarizeIssues(issues);
+    if (issues.length > 0) {
+      this.logger.warn(
+        {
+          tenantId: request.tenantId,
+          bomId,
+          issueSummary
+        },
+        'compliance.bom.ingestion_issues'
+      );
+    }
+    this.logger.info(
+      {
+        tenantId: request.tenantId,
+        bomId,
+        productId: request.productId,
+        assemblies: persistable.assemblies.length,
+        components: persistable.components.length,
+        issues: issues.length
+      },
+      'compliance.bom.ingested'
+    );
+    await this.repo.recordAuditLog({
+      tenantId: request.tenantId,
+      actorUserId: request.uploadedBy,
+      action: 'COMPLIANCE_BOM_UPLOADED',
+      target: `bom:${bomId}`,
+      payload: {
+        productId: request.productId,
+        assemblies: persistable.assemblies.length,
+        components: persistable.components.length,
+        issues: issueSummary,
+        sourceDocumentId: request.sourceDocumentId ?? null
+      }
+    });
 
     return {
       bomId,
@@ -66,6 +112,15 @@ export class ComplianceService {
 
   async recordIssue(payload: { tenantId: TenantID; bomId: UUID; partNumber?: string; code: string; message: string }) {
     await this.repo.recordIngestionIssue(payload);
+    this.logger.warn(
+      {
+        tenantId: payload.tenantId,
+        bomId: payload.bomId,
+        partNumber: payload.partNumber,
+        code: payload.code
+      },
+      'compliance.ingestion.issue_recorded'
+    );
   }
 
   async ingestCertificates(request: CertificateUploadRequest): Promise<CertificateUploadResponse> {
@@ -100,7 +155,39 @@ export class ComplianceService {
         validUntil: certificate.validUntil,
         dataQualityFlags
       });
+      await this.repo.recordAuditLog({
+        tenantId: request.tenantId,
+        action: 'COMPLIANCE_CERT_UPLOADED',
+        target: `certificate:${certificate.id}`,
+        payload: {
+          supplierId: certificateRecord.supplierId,
+          partNumber: certificateRecord.partNumber,
+          validUntil: certificate.validUntil,
+          findings: normalizedFindings.length,
+          dataQualityFlags,
+          sourceDocumentId: certificateRecord.sourceDocId ?? null
+        }
+      });
     }
+
+    const issueSummary = this.summarizeIssues(issues);
+    if (issues.length > 0) {
+      this.logger.warn(
+        {
+          tenantId: request.tenantId,
+          issueSummary
+        },
+        'compliance.certs.ingestion_issues'
+      );
+    }
+    this.logger.info(
+      {
+        tenantId: request.tenantId,
+        certificates: items.length,
+        issues: issues.length
+      },
+      'compliance.certs.ingested'
+    );
 
     return { items, issues };
   }
@@ -189,6 +276,15 @@ export class ComplianceService {
         message: `CORA parsing failed for part ${certificate.partNumber}: ${(error as Error).message}`,
         partNumber: certificate.partNumber
       });
+      this.logger.error(
+        {
+          tenantId,
+          documentId: certificate.sourceDocumentId,
+          partNumber: certificate.partNumber,
+          err: error
+        },
+        'compliance.certs.cora_parse_failed'
+      );
       return [];
     }
   }
@@ -266,7 +362,7 @@ export class ComplianceService {
     const supplierIssues = issues.filter((issue) => issue.code === 'SUPPLIER_MISSING' && issue.partNumber);
     await Promise.all(
       supplierIssues.map((issue) =>
-        this.repo.recordIngestionIssue({
+        this.recordIssue({
           tenantId,
           bomId,
           partNumber: issue.partNumber,
@@ -347,5 +443,12 @@ export class ComplianceService {
       return Math.round(weightG * 1000);
     }
     return null;
+  }
+
+  private summarizeIssues(issues: Array<{ code: string }>): Record<string, number> {
+    return issues.reduce<Record<string, number>>((acc, issue) => {
+      acc[issue.code] = (acc[issue.code] ?? 0) + 1;
+      return acc;
+    }, {});
   }
 }

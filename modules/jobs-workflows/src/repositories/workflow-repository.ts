@@ -1,4 +1,4 @@
-import type { DatabaseClient, SupplierRequest, TenantID, UUID } from '@certivo/lib-db';
+import type { AuditLogInsert, DatabaseClient, SupplierRequest, TenantID, UUID } from '@certivo/lib-db';
 
 export type WorkflowEventType = 'SUPPLIER_REQUEST' | 'INGESTION' | 'IMPACT' | 'LLM' | 'SYSTEM';
 
@@ -36,6 +36,12 @@ export class WorkflowRepository {
              where tenant_id = $1 and id = $2`,
       values: [tenantId, requestId]
     });
+    await this.recordAuditLog({
+      tenantId,
+      action: 'supplier.request.status.sent',
+      target: `supplier_request:${requestId}`,
+      payload: { requestId, status: 'SENT' }
+    });
   }
 
   async markSupplierReminder(tenantId: TenantID, requestId: UUID): Promise<void> {
@@ -45,6 +51,12 @@ export class WorkflowRepository {
                  updated_at = now()
              where tenant_id = $1 and id = $2`,
       values: [tenantId, requestId]
+    });
+    await this.recordAuditLog({
+      tenantId,
+      action: 'supplier.request.status.reminder',
+      target: `supplier_request:${requestId}`,
+      payload: { requestId }
     });
   }
 
@@ -56,6 +68,12 @@ export class WorkflowRepository {
                  updated_at = now()
              where tenant_id = $1 and id = $2`,
       values: [tenantId, requestId]
+    });
+    await this.recordAuditLog({
+      tenantId,
+      action: 'supplier.request.status.escalated',
+      target: `supplier_request:${requestId}`,
+      payload: { requestId, status: 'ESCALATED' }
     });
   }
 
@@ -72,6 +90,16 @@ export class WorkflowRepository {
                  updated_at = now()
              where tenant_id = $1 and id = $2`,
       values: [tenantId, requestId, status, options.respondedAt ?? null]
+    });
+    await this.recordAuditLog({
+      tenantId,
+      action: options.responded ? 'supplier.request.status.responded' : 'supplier.request.status.closed',
+      target: `supplier_request:${requestId}`,
+      payload: {
+        requestId,
+        status,
+        respondedAt: options.respondedAt ?? null
+      }
     });
   }
 
@@ -94,6 +122,14 @@ export class WorkflowRepository {
       text: `insert into workflow_events (tenant_id, workflow, payload)
              values ($1, $2, $3::jsonb)`,
       values: [tenantId, workflow, payload]
+    });
+  }
+
+  private async recordAuditLog(entry: AuditLogInsert): Promise<void> {
+    await this.db.query({
+      text: `insert into audit_logs (tenant_id, actor_user_id, action, target, payload_json)
+             values ($1,$2,$3,$4,$5::jsonb)`,
+      values: [entry.tenantId, entry.actorUserId ?? null, entry.action, entry.target, entry.payload ?? null]
     });
   }
 }

@@ -56,10 +56,10 @@ type IngestionIssueRecord = {
 
 type AuditLogRecord = {
   id: UUID;
-  promptHash: string;
-  model: string;
-  latencyMs: number;
-  outcome: 'SUCCESS' | 'RETRY' | 'FAILED';
+  action: string;
+  target: string;
+  actorUserId: UUID | null;
+  payload: Record<string, unknown> | null;
   createdAt: string;
 };
 
@@ -243,19 +243,15 @@ export class DashboardRepository {
     return this.db.query<AuditLogRecord>({
       text: `
         select
-          lc.id,
-          lc.prompt_hash as "promptHash",
-          lc.model,
-          lc.latency_ms as "latencyMs",
-          case
-            when lc.output_json is not null then 'SUCCESS'
-            when lc.output_json is null and lc.latency_ms > 2000 then 'RETRY'
-            else 'FAILED'
-          end as "outcome",
-          lc.created_at as "createdAt"
-        from llm_calls lc
-        where lc.tenant_id = $1
-        order by lc.created_at desc
+          al.id,
+          al.action,
+          al.target,
+          al.actor_user_id as "actorUserId",
+          al.payload_json as payload,
+          al.created_at as "createdAt"
+        from audit_logs al
+        where al.tenant_id = $1
+        order by al.created_at desc
         limit $2
       `,
       values: [tenantId, limit]

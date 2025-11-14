@@ -199,6 +199,9 @@ importers:
       '@certivo/lib-db':
         specifier: workspace:*
         version: link:../../libs/db
+      '@certivo/lib-logging':
+        specifier: workspace:*
+        version: link:../../libs/logging
       csv-parse:
         specifier: ^5.6.0
         version: 5.6.0
