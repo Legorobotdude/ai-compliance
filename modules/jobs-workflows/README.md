@@ -21,6 +21,15 @@ Defines workflow specs, activities, and queue consumers shared by the worker app
 
 Shared activities live under `src/activities/*` and use `WorkflowRepository` for persistence so everything stays transactional with the main Postgres schema.
 
+### Known stubs / follow-ups
+
+- `performRetry` activity is a stub; wire it to the Compliance ingestion pipelines so retries reprocess BOM/certificate issues (Architecture.md §3).
+- No Temporal Schedules/Nexus jobs yet—currently everything is API-triggered. Add periodic schedules/backfills for ingestion + supplier cadences as the Ops Center evolves.
+- Impact simulation workflows mentioned in Architecture.md §1 are not implemented yet; add dedicated workflows + activities once Risk module triggers are ready.
+- Signals beyond the state query (`supplierRequestWorkflowState`) are missing; add manual escalation/cancel signals and richer queries for Ops Center dashboards.
+- Worker versioning/build IDs are not configured; introduce Temporal worker versioning before production deployments.
+- `scripts/temporal-smoke.mjs` only covers the supplier workflow path today; add ingestion/impact coverage once those flows are functional.
+
 ## Running the worker locally
 
 ```bash
