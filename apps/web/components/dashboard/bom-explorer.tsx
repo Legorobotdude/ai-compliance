@@ -34,11 +34,11 @@ const columns: ColumnDef<DashboardBomRow>[] = [
   {
     header: "Part",
     accessorKey: "partNumber",
-    size: 180,
+    size: 200,
     cell: (info) => (
       <div>
         <p className="font-medium text-white">{info.getValue<string>()}</p>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-slate-400 mt-0.5">
           {info.row.original.assemblyName ?? info.row.original.assemblyId}
         </p>
       </div>
@@ -47,13 +47,13 @@ const columns: ColumnDef<DashboardBomRow>[] = [
   {
     header: "Supplier",
     accessorFn: (row) => row.supplierName ?? "Unassigned",
-    size: 200,
-    cell: (info) => <span>{info.getValue<string>()}</span>
+    size: 180,
+    cell: (info) => <span className="text-slate-200">{info.getValue<string>()}</span>
   },
   {
     header: "Findings",
     accessorKey: "findings",
-    size: 380,
+    size: 360,
     cell: (info) => {
       const findings = info.getValue<DashboardBomRow["findings"]>();
       if (!findings.length) {
@@ -77,27 +77,39 @@ const columns: ColumnDef<DashboardBomRow>[] = [
     header: "Status",
     accessorKey: "status",
     size: 140,
+    sortingFn: (rowA, rowB) => {
+      const statusOrder: Record<BomStatus, number> = {
+        EXPIRED: 0,
+        OVER_LIMIT: 1,
+        MISSING: 2,
+        COMPLIANT: 3
+      };
+      const statusA = rowA.getValue<BomStatus>("status");
+      const statusB = rowB.getValue<BomStatus>("status");
+      return statusOrder[statusA] - statusOrder[statusB];
+    },
     cell: (info) => (
-      <div className="flex items-center">
-        <span className={statusClass(info.getValue<BomStatus>())}>{info.getValue<string>()}</span>
-      </div>
+      <span className={statusClass(info.getValue<BomStatus>())}>{info.getValue<string>()}</span>
     )
   },
   {
     header: "Valid until",
     accessorKey: "validUntil",
     size: 120,
-    cell: (info) =>
-      info.getValue<string | undefined>()
-        ? new Date(info.getValue<string>()).toLocaleDateString()
-        : "—"
+    cell: (info) => (
+      <span className="text-slate-200">
+        {info.getValue<string | undefined>()
+          ? new Date(info.getValue<string>()).toLocaleDateString()
+          : "—"}
+      </span>
+    )
   }
 ];
 
 export function BomExplorer({ rows }: BomExplorerProps) {
   const [statusFilter, setStatusFilter] = useState<BomStatus | "ALL">("ALL");
   const [search, setSearch] = useState("");
-  const [sorting, setSorting] = useState<SortingState>([{ id: "partNumber", desc: false }]);
+  const [sorting, setSorting] = useState<SortingState>([{ id: "status", desc: false }]);
   const parentRef = useRef<HTMLDivElement | null>(null);
 
   const filteredData = useMemo(() => {
@@ -156,55 +168,57 @@ export function BomExplorer({ rows }: BomExplorerProps) {
         </div>
       }
     >
-      <div ref={parentRef} className="h-96 overflow-auto rounded-2xl border border-slate-800">
+      <div ref={parentRef} className="h-96 overflow-auto rounded-2xl border border-slate-800 bg-slate-950">
         {filteredData.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-slate-500">
             No BOM entries match the current filters.
           </div>
         ) : (
-          <table className="w-full text-sm table-fixed">
-            <thead className="sticky top-0 bg-slate-950/90 text-left text-xs uppercase tracking-wide text-slate-400 backdrop-blur z-10">
+          <div>
+            {/* Header */}
+            <div className="sticky top-0 bg-slate-950 border-b border-slate-800 z-10">
               {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id}>
+                <div key={headerGroup.id} className="flex text-xs uppercase tracking-wide text-slate-400">
                   {headerGroup.headers.map((header) => (
-                    <th
+                    <div
                       key={header.id}
                       className="px-4 py-3 font-medium"
-                      style={{ width: header.column.getSize() }}
+                      style={{ width: `${header.column.getSize()}px`, flexShrink: 0 }}
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
-                    </th>
+                    </div>
                   ))}
-                </tr>
+                </div>
               ))}
-            </thead>
-            <tbody style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
+            </div>
+            {/* Body */}
+            <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: "relative" }}>
               {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                 const row = table.getRowModel().rows[virtualRow.index];
                 if (!row) return null;
                 return (
-                  <tr
+                  <div
                     key={row.id}
-                    className="absolute left-0 top-0 w-full border-b border-slate-800/80 text-slate-200"
+                    className="absolute left-0 top-0 w-full border-b border-slate-800/80 flex items-center text-sm"
                     style={{
                       transform: `translateY(${virtualRow.start}px)`,
                       height: `${virtualRow.size}px`
                     }}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <td
+                      <div
                         key={cell.id}
-                        className="px-4 py-3 align-middle"
-                        style={{ width: cell.column.getSize() }}
+                        className="px-4 py-3"
+                        style={{ width: `${cell.column.getSize()}px`, flexShrink: 0 }}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
+                      </div>
                     ))}
-                  </tr>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
+            </div>
+          </div>
         )}
       </div>
     </SectionCard>
