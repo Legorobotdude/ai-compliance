@@ -20,11 +20,11 @@ export default async function DashboardPage() {
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-10">
       <header className="flex flex-col gap-4 rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900/90 via-slate-900/60 to-slate-900/30 p-8 text-white shadow-card lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-widest text-brand-300">Architecture §6-aligned dashboard</p>
+          <p className="text-sm uppercase tracking-widest text-brand-300">Compliance Dashboard</p>
           <h1 className="mt-2 text-3xl font-semibold">Certivo Compliance Command Center</h1>
           <p className="mt-2 text-slate-300">
             Tracking BOM {snapshot.bom.externalId} ({snapshot.bom.productName}) with supplier scorecards, risk
-            heatmaps, and CORA observability.
+            heatmaps, and AI compliance monitoring.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

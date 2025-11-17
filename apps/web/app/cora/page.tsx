@@ -6,6 +6,7 @@ import { CoraCapabilityGrid } from "@/components/cora/cora-capability-grid";
 import { CoraPromptRecipes } from "@/components/cora/cora-prompt-recipes";
 import { GuardrailChecklist } from "@/components/cora/guardrail-checklist";
 import { CoraTelemetryPanel } from "@/components/cora/cora-telemetry-panel";
+import { CoraChatPanel } from "@/components/cora/cora-chat-panel";
 import { fetchDashboardSnapshot } from "@/lib/api/dashboard";
 
 export const dynamic = "force-dynamic";
@@ -34,11 +35,10 @@ export default async function CoraShowcasePage() {
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10">
       <header className="flex flex-col gap-4 rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900/90 via-slate-900/60 to-slate-900/30 p-8 text-white shadow-card lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-widest text-brand-300">Architecture §§4–7 showcase</p>
-          <h1 className="mt-2 text-3xl font-semibold">CORA AI Operations Dashboard</h1>
+          <p className="text-sm uppercase tracking-widest text-brand-300">AI Compliance Assistant</p>
+          <h1 className="mt-2 text-3xl font-semibold">CORA AI Operations</h1>
           <p className="mt-2 text-slate-300">
-            Exercise the document parser, supplier email copilot, and risk summary bot while reviewing guardrails,
-            telemetry, and audit traces captured in Architecture.md.
+            AI-powered document parsing, supplier email generation, and risk summarization with built-in safety guardrails and telemetry monitoring.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -69,6 +69,8 @@ export default async function CoraShowcasePage() {
         defaultProductId={snapshot.bom.productId}
         defaultSupplierId={defaultSupplierId}
       />
+
+      <CoraChatPanel />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <CoraPromptRecipes />

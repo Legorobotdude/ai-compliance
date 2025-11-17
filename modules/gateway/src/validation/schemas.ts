@@ -13,6 +13,7 @@ export const uuidSchema = () => z.string().uuid();
 const uuid = uuidSchema;
 export const bomUploadSchema = bomUploadRequestSchema;
 export const certificateUploadSchema = certificateUploadRequestSchema;
+const ragSourceType = () => z.enum(['DOCUMENT', 'REGULATION', 'NOTE']);
 
 export const supplierRequestSchema = z
   .object({
@@ -93,3 +94,53 @@ export const aiRiskSummarySchema = z
     message: 'Either bomId or productId must be provided'
   })
   .strict() satisfies z.ZodType<AiRiskSummaryRequest>;
+
+export const ragDocumentIngestSchema = z
+  .object({
+    tenantId: z.string().min(1),
+    sourceKey: z.string().min(1),
+    title: z.string().min(1),
+    content: z.string().min(1),
+    description: z.string().optional(),
+    sourceDocumentId: uuid().optional(),
+    regulationId: uuid().optional(),
+    sourceUrl: z.string().url().optional(),
+    sourceType: ragSourceType().optional(),
+    language: z.string().min(2).max(10).optional(),
+    metadata: z.record(z.string(), z.any()).optional()
+  })
+  .strict();
+
+const chatMessageSchema = z
+  .object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string().min(1)
+  })
+  .strict();
+
+const searchFiltersSchema = z
+  .object({
+    sourceTypes: z.array(ragSourceType()).min(1).optional(),
+    documentIds: z.array(uuid()).min(1).optional(),
+    sourceKeys: z.array(z.string().min(1)).min(1).optional(),
+    minScore: z.number().min(0).max(10).optional()
+  })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'Provide at least one filter field when using filters'
+  })
+  .optional();
+
+export const aiChatSchema = z
+  .object({
+    tenantId: z.string().min(1),
+    conversationId: uuid().optional(),
+    messages: z.array(chatMessageSchema).min(1),
+    topK: z.number().int().min(1).max(25).optional(),
+    filters: searchFiltersSchema
+  })
+  .refine((value) => value.messages.some((message) => message.role === 'user'), {
+    message: 'Provide at least one user message',
+    path: ['messages']
+  })
+  .strict();

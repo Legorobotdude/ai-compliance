@@ -7,27 +7,26 @@ type SupplierWorkflowChecklistProps = {
 export function SupplierWorkflowChecklist({ bomExternalId }: SupplierWorkflowChecklistProps) {
   return (
     <SectionCard
-      title="Smoke test playbook"
-      description="Pair this UI with scripts/supplier-smoke.mjs to validate Architecture §5 workflows end-to-end."
+      title="Testing Guide"
+      description="Validate supplier workflows and data consistency."
     >
       <ol className="list-decimal space-y-3 pl-4 text-sm text-slate-300">
         <li>
           Run <code className="rounded bg-slate-900 px-2 py-1 font-mono text-xs">node scripts/supplier-smoke.mjs</code>{" "}
-          to confirm `/dashboard/snapshot` has seeded suppliers + BOM {bomExternalId}. The script also resolves{" "}
-          <code>requestedBy</code> from Postgres.
+          to verify <code className="rounded bg-slate-900 px-2 py-1 font-mono text-xs">/dashboard/snapshot</code> returns
+          suppliers and BOM {bomExternalId} with correct user associations.
         </li>
         <li>
-          Use the Scorecard Probe above to hit `/supplier/scorecard/:supplierId` repeatedly while tweaking data—verifies
-          the SLA metrics, contact lists, and blocked parts the script asserts for (Architecture §5 table refs).
+          Use the Scorecard Probe to test <code className="rounded bg-slate-900 px-2 py-1 font-mono text-xs">/supplier/scorecard/:supplierId</code> endpoint
+          and verify SLA metrics, contact information, and blocked component lists.
         </li>
         <li>
-          Draft a request via the console, then check the script output: it creates the row, pulls blocked parts, and
-          prints the CORA draft exactly like the UI response. Compare IDs/timestamps to ensure parity.
+          Create a supplier request via the console and verify the response includes request ID, blocked parts list, and
+          AI-generated email draft matching expected format.
         </li>
         <li>
-          Hop into psql (or rerun the script’s verification step) to confirm `supplier_requests.status`, `due_at`,
-          `sent_at`, and `audit_logs` rows were updated. This finalizes the smoke test by proving persistence +
-          observability.
+          Confirm database persistence by checking that <code className="rounded bg-slate-900 px-2 py-1 font-mono text-xs">supplier_requests</code> table
+          contains correct status, due date, sent timestamp, and audit log entries.
         </li>
       </ol>
     </SectionCard>

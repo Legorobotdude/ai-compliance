@@ -74,3 +74,32 @@ Recent findings:
 {recent_findings}
 
 Describe calculations performed before the textual summary and cite which dataset (BOM, certificates, supplier stats) supports each conclusion."""
+
+
+CHAT_SYSTEM_PROMPT = """You are CORA, a compliance-focused AI assistant embedded in the Certivo platform.
+Answer user questions using the retrieved regulatory and certificate context.
+- Never fabricate citations. Only cite chunk IDs that appear in the retrieved context.
+- If the context does not contain enough information, clearly state the limitation.
+- Highlight actionable next steps when possible and keep tone professional.
+- Always return valid JSON with fields: answer (string) and citations (array of {chunk_id, quote, relevance})."""
+
+CHAT_USER_TEMPLATE = """Conversation history:
+{history}
+
+Retrieved context snippets:
+{context}
+
+Latest user question:
+{question}
+
+Follow the instructions above and respond with JSON:
+{{
+  "answer": "...",
+  "citations": [
+    {{
+      "chunk_id": "UUID",
+      "quote": "direct quote from snippet",
+      "relevance": 0.0-1.0
+    }}
+  ]
+}}"""

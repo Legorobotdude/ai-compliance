@@ -5,13 +5,19 @@ from __future__ import annotations
 from datetime import date, datetime, time, timezone
 from collections import Counter, defaultdict
 from typing import Any, Iterable, Sequence
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
+from pydantic import BaseModel
 
 from .config import Settings
 from .llm import LLMClient
 from .models import (
+    ChatCitation,
+    ChatContextChunk,
+    ChatMessage,
+    ChatRequest,
+    ChatResponse,
     BomRecord,
     CertificateStatusRow,
     DocumentParsePayload,
@@ -30,6 +36,8 @@ from .models import (
 from .prompts import (
     DOCUMENT_PARSE_SYSTEM,
     DOCUMENT_PARSE_USER_TEMPLATE,
+    CHAT_SYSTEM_PROMPT,
+    CHAT_USER_TEMPLATE,
     RISK_SUMMARY_SYSTEM,
     RISK_SUMMARY_USER_TEMPLATE,
     SUPPLIER_EMAIL_SYSTEM,
@@ -38,6 +46,13 @@ from .prompts import (
 from .repositories import DocumentRepository, LlmLogRepository, RiskRepository, SupplierRepository
 from .storage import StorageError
 from .text_extractor import TextExtractor, TextExtractionError
+
+
+class ChatCompletionPayload(BaseModel):
+    """LLM response contract for chat completions."""
+
+    answer: str
+    citations: list[ChatCitation]
 
 
 class DocumentParserService:
@@ -348,13 +363,79 @@ class RiskSummaryService:
         return "\n".join(lines)
 
 
+class ChatAssistantService:
+    def __init__(self, *, llm: LLMClient, logger: LlmLogRepository) -> None:
+        self._llm = llm
+        self._logger = logger
+
+    async def respond(self, tenant_id: UUID, payload: ChatRequest) -> ChatResponse:
+        if not payload.messages:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Messages are required")
+        history_text = self._format_history(payload.messages)
+        context_text = self._format_context(payload.context_chunks)
+        question = payload.messages[-1].content
+        user_prompt = CHAT_USER_TEMPLATE.format(history=history_text, context=context_text, question=question)
+        llm_payload = await self._llm.complete_json(
+            agent_name=LlmAgent.CHAT.value,
+            system_prompt=CHAT_SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            response_model=ChatCompletionPayload
+        )
+        response = ChatResponse(
+            conversation_id=payload.conversation_id or uuid4(),
+            message_id=uuid4(),
+            answer=llm_payload.payload.answer,
+            citations=llm_payload.payload.citations
+        )
+        await self._logger.record_llm_call(
+            tenant_id=tenant_id,
+            agent=LlmAgent.CHAT,
+            prompt_hash=llm_payload.prompt_hash,
+            input_payload=payload.model_dump(),
+            output_payload=response.model_dump(),
+            model=llm_payload.model,
+            latency_ms=llm_payload.latency_ms
+        )
+        await self._logger.append_audit_log(
+            tenant_id=tenant_id,
+            action="CHAT_COMPLETED",
+            target=str(response.conversation_id),
+            payload={"message_id": str(response.message_id), "citations": [c.chunk_id for c in response.citations]}
+        )
+        return response
+
+    def _format_history(self, messages: Sequence[ChatMessage]) -> str:
+        formatted: list[str] = []
+        for message in messages[-6:]:
+            role = "USER" if message.role == "user" else "CORA"
+            formatted.append(f"{role}: {message.content.strip()}")
+        return "\n".join(formatted) or "USER: (no prior history)"
+
+    def _format_context(self, chunks: Sequence[ChatContextChunk]) -> str:
+        if not chunks:
+            return "No retrieved context provided. Explain any limitations clearly."
+        lines: list[str] = []
+        for chunk in chunks[:5]:
+            excerpt = " ".join(chunk.content.split())[:400]
+            lines.append(f"[{chunk.chunk_id}] {chunk.source_title}: {excerpt}")
+        return "\n".join(lines)
+
+
 class ServiceContainer:
     """Tiny service locator stored on the FastAPI app state."""
 
-    def __init__(self, *, document_parser: DocumentParserService, supplier_email: SupplierEmailService, risk_summary: RiskSummaryService) -> None:
+    def __init__(
+        self,
+        *,
+        document_parser: DocumentParserService,
+        supplier_email: SupplierEmailService,
+        risk_summary: RiskSummaryService,
+        chat: ChatAssistantService
+    ) -> None:
         self.document_parser = document_parser
         self.supplier_email = supplier_email
         self.risk_summary = risk_summary
+        self.chat = chat
 
 
 def convert_to_ppm(value: float | None, unit: str | None) -> float | None:

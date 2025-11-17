@@ -190,10 +190,57 @@ export interface AuditLogInsert {
 export interface LlmCall extends Timestamped {
   id: UUID;
   tenantId: TenantID;
-  agent: 'DOCUMENT_PARSE' | 'SUPPLIER_EMAIL' | 'RISK_SUMMARY';
+  agent: 'DOCUMENT_PARSE' | 'SUPPLIER_EMAIL' | 'RISK_SUMMARY' | 'CHAT';
   promptHash: string;
   inputJson: Record<string, unknown>;
   outputJson?: Record<string, unknown>;
   model: string;
   latencyMs: number;
+}
+
+export type RagDocumentStatus = 'PENDING' | 'CHUNKING' | 'EMBEDDING' | 'READY' | 'FAILED';
+export type RagSourceType = 'DOCUMENT' | 'REGULATION' | 'NOTE';
+
+export interface RagDocument extends Timestamped {
+  id: UUID;
+  tenantId: TenantID;
+  sourceKey: string;
+  sourceDocumentId?: UUID | null;
+  regulationId?: UUID | null;
+  title: string;
+  description?: string | null;
+  sourceType: RagSourceType;
+  language?: string | null;
+  sourceUrl?: string | null;
+  checksum: string;
+  tokenCount: number;
+  chunkCount: number;
+  status: RagDocumentStatus;
+  lastError?: string | null;
+  metadata?: Record<string, unknown> | null;
+  indexedAt?: string | null;
+}
+
+export interface RagChunk extends Timestamped {
+  id: UUID;
+  tenantId: TenantID;
+  documentId: UUID;
+  regulationId?: UUID | null;
+  content: string;
+  sourceUrl?: string | null;
+  metadata?: Record<string, unknown> | null;
+  chunkIndex: number;
+  tokenCount?: number | null;
+  citationLabel?: string | null;
+}
+
+export interface RagQueryLog {
+  id: UUID;
+  tenantId: TenantID;
+  query: string;
+  topK: number;
+  filters?: Record<string, unknown>;
+  resultIds: UUID[];
+  conversationId?: UUID | null;
+  createdAt: string;
 }

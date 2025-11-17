@@ -8,28 +8,28 @@ type Guardrail = {
 
 const guardrails: Guardrail[] = [
   {
-    label: "Deterministic schema validation",
-    detail: "certificate_v1 validated via ajv/pydantic + retries (Architecture.md §4).",
+    label: "Schema validation",
+    detail: "Certificate data validated with automatic retry on parsing errors.",
     status: "implemented"
   },
   {
-    label: "Unit normalization & range checks",
-    detail: "% → ppm, mg/kg passthrough, unknown units flagged for Ops Center (§5).",
+    label: "Unit normalization",
+    detail: "Automatic conversion: % → ppm, mg/kg passthrough. Unknown units flagged for review.",
     status: "implemented"
   },
   {
-    label: "Prompt hashing & audit logs",
-    detail: "Hash stored instead of raw prompt, latency + model persisted (Architecture.md §7).",
+    label: "Audit logging",
+    detail: "All AI calls logged with hashed prompts, latency metrics, and model information.",
     status: "implemented"
   },
   {
-    label: "PII scrubbing",
-    detail: "Supplier emails/contacts redacted before prompt send, logged to audit trail (§4 Guardrails).",
+    label: "PII protection",
+    detail: "Sensitive contact information redacted before sending to AI, with full audit trail.",
     status: "implemented"
   },
   {
-    label: "Spend throttling",
-    detail: "Per-tenant rate limits + retry/backoff keep burst usage within Architecture.md constraints.",
+    label: "Rate limiting",
+    detail: "Per-tenant throttling with retry and backoff to control AI service costs.",
     status: "implemented"
   }
 ];
@@ -41,7 +41,7 @@ const statusClass: Record<Guardrail["status"], string> = {
 
 export function GuardrailChecklist() {
   return (
-    <SectionCard title="Guardrail Checklist" description="Mirror of Architecture.md §4 guardrails + §7 observability hooks.">
+    <SectionCard title="AI Safety Guardrails" description="Security and governance controls for AI-powered compliance operations.">
       <ul className="space-y-3">
         {guardrails.map((guardrail) => (
           <li key={guardrail.label} className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">

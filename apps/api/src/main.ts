@@ -17,10 +17,13 @@ import {
   impactPredictSchema,
   supplierRequestSchema,
   uuidSchema,
+  ragDocumentIngestSchema,
+  aiChatSchema,
   validateWithSchema,
   RequestValidationError
 } from '@certivo/gateway';
 import type { BomUploadRequest, CertificateUploadRequest } from '@certivo/compliance';
+import type { DocumentIngestRequest, SearchFilters } from '@certivo/search-rag';
 import type { DocumentController, UploadRequest } from '@certivo/file-document';
 import type { ImpactPredictRequest } from '@certivo/risk-impact';
 import type { SupplierRequestInput } from '@certivo/supplier';
@@ -165,6 +168,14 @@ interface BuildAppOptions {
   logger: Logger;
   metrics: ApiMetrics;
   jwtVerifier: JwtVerifier;
+}
+
+interface AiChatHttpRequest {
+  tenantId: string;
+  conversationId?: string;
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  topK?: number;
+  filters?: SearchFilters;
 }
 
 function buildApp(options: BuildAppOptions): Express {
@@ -322,6 +333,15 @@ function buildApp(options: BuildAppOptions): Express {
   );
 
   app.post(
+    '/rag/documents',
+    route('POST /rag/documents', async (req, res) => {
+      const httpReq = buildHttpRequest<DocumentIngestRequest>(req, { bodyOverrides: { tenantId: req.tenantId } });
+      httpReq.body = validateWithSchema(ragDocumentIngestSchema, httpReq.body);
+      await controller.postRagDocument(httpReq, createHttpResponse(res));
+    })
+  );
+
+  app.post(
     '/ai/parse-document',
     route('POST /ai/parse-document', async (req, res) => {
       const httpReq = buildHttpRequest<AiParseDocumentRequest>(req, {
@@ -351,6 +371,15 @@ function buildApp(options: BuildAppOptions): Express {
       });
       httpReq.body = validateWithSchema(aiRiskSummarySchema, httpReq.body);
       await controller.postAiRiskSummary(httpReq, createHttpResponse(res));
+    })
+  );
+
+  app.post(
+    '/ai/chat',
+    route('POST /ai/chat', async (req, res) => {
+      const httpReq = buildHttpRequest<AiChatHttpRequest>(req, { bodyOverrides: { tenantId: req.tenantId } });
+      httpReq.body = validateWithSchema(aiChatSchema, httpReq.body);
+      await controller.postAiChat(httpReq, createHttpResponse(res));
     })
   );
 
@@ -590,7 +619,7 @@ function readinessHandler(db: DatabaseClient) {
     try {
       await db.query({ text: 'select 1' });
       res.json({ status: 'ready' });
-    } catch (error) {
+    } catch {
       next(new ServiceUnavailableError('Database not ready'));
     }
   };

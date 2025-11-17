@@ -20,11 +20,10 @@ export default async function SupplierShowcasePage() {
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-10">
       <header className="flex flex-col gap-4 rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900/60 to-slate-900/20 p-8 text-white shadow-card lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-widest text-brand-300">Architecture §5 Supplier Workflows</p>
-          <h1 className="mt-2 text-3xl font-semibold">Supplier Ops Showcase</h1>
+          <p className="text-sm uppercase tracking-widest text-brand-300">Supplier Management</p>
+          <h1 className="mt-2 text-3xl font-semibold">Supplier Operations</h1>
           <p className="mt-2 text-slate-300">
-            Purpose-built cockpit for the supplier module: inspect live scorecards, fire `/supplier/request`, and follow
-            along with <code className="font-mono text-xs">scripts/supplier-smoke.mjs</code> without leaving the UI.
+            Monitor supplier performance, send compliance requests via <code className="font-mono text-xs">/supplier/request</code> endpoint, and track request status.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

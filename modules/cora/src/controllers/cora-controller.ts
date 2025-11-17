@@ -1,4 +1,6 @@
 import type {
+  AiChatRequest,
+  AiChatResponse,
   AiParseDocumentRequest,
   AiParseDocumentResponse,
   AiRiskSummaryRequest,
@@ -21,5 +23,9 @@ export class CoraController {
 
   riskSummary(payload: AiRiskSummaryRequest): Promise<AiRiskSummaryResponse> {
     return this.service.riskSummary(payload);
+  }
+
+  chat(payload: AiChatRequest): Promise<AiChatResponse> {
+    return this.service.chat(payload);
   }
 }

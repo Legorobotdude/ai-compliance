@@ -21,24 +21,24 @@ export function CoraPlayground({
   return (
     <SectionCard
       title="CORA Playground"
-      description="Hit the Architecture.md §4 AI endpoints through the Express gateway without leaving the browser."
+      description="Test AI endpoints for document parsing, supplier emails, and risk summaries directly from the browser."
     >
       <div className="grid gap-6 lg:grid-cols-3">
         <LabActionPanel
           title="Parse document"
-          description="Trigger /ai/parse-document to exercise the FastAPI OCR + normalization pipeline."
+          description="Test document parsing with <code className='font-mono text-xs'>/ai/parse-document</code> endpoint."
         >
           <ParseDocumentForm defaultDocumentId={SAMPLE_DOCUMENT_IDS.rohs} />
         </LabActionPanel>
         <LabActionPanel
           title="Draft supplier email"
-          description="Prompt CORA to draft localized outreach referencing the selected BOM."
+          description="Generate localized supplier outreach email for missing certificates."
         >
           <SupplierEmailForm defaultBomId={defaultBomId} defaultSupplierId={supplierFallback} />
         </LabActionPanel>
         <LabActionPanel
           title="Generate risk summary"
-          description="Request the AI risk synopsis for a BOM or product baseline."
+          description="Create AI-generated executive risk summary for a BOM or product."
         >
           <RiskSummaryForm defaultBomId={defaultBomId} defaultProductId={defaultProductId} />
         </LabActionPanel>

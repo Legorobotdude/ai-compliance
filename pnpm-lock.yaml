@@ -71,6 +71,9 @@ importers:
       '@certivo/risk-impact':
         specifier: workspace:*
         version: link:../../modules/risk-impact
+      '@certivo/search-rag':
+        specifier: workspace:*
+        version: link:../../modules/search-rag
       '@certivo/supplier':
         specifier: workspace:*
         version: link:../../modules/supplier

@@ -5,7 +5,7 @@ import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "Certivo Compliance Command Center",
-  description: "Frontend dashboard aligning with Architecture.md Section 6 to monitor BOMs, suppliers, risk, and CORA activity."
+  description: "Compliance management dashboard to monitor BOMs, suppliers, risk assessments, and AI-powered compliance operations."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

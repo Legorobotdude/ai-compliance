@@ -73,7 +73,29 @@ export class ApiModuleFactory {
       secret: documentsSecret,
       defaultTtlMs: options.documents?.downloadTtlMs
     });
-    const docService = new DocumentService(docRepo, docStorage, docSigner);
+    const searchRepo = new SearchRepository(options.db);
+    const searchService = new SearchService(searchRepo);
+    const docService = new DocumentService(docRepo, docStorage, docSigner, {
+      ragIngestor: {
+        async ingest({ tenantId, document, content, mime }) {
+          await searchService.ingestDocument({
+            tenantId,
+            sourceKey: `document:${document.id}`,
+            title: document.filename,
+            description: `Document uploaded via /documents (${document.filename})`,
+            content,
+            sourceDocumentId: document.id,
+            sourceUrl: document.storageUrl,
+            sourceType: 'DOCUMENT',
+            metadata: {
+              mime,
+              sha256: document.sha256,
+              bytes: document.bytes
+            }
+          });
+        }
+      }
+    });
     const docController = new DocumentController(docService);
 
     const complianceRepo = new ComplianceRepository(options.db);
@@ -111,8 +133,6 @@ export class ApiModuleFactory {
     const riskService = new RiskImpactService(riskRepo);
     const riskController = new RiskImpactController(riskService);
 
-    const searchRepo = new SearchRepository(options.db);
-    const searchService = new SearchService(searchRepo);
     const searchController = new SearchController(searchService);
 
     const dashboardRepo = new DashboardRepository(options.db);

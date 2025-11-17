@@ -13,11 +13,11 @@ const capabilities: Capability[] = [
     name: "AI Document Parser",
     endpoint: "POST /ai/parse-document",
     summary:
-      "Converts PDF/SDS/CofC files into the certificate_v1 schema with unit normalization before compliance ingestion.",
+      "Converts PDF/SDS/Certificate files into structured data with unit normalization for compliance tracking.",
     bullets: [
-      "Implements Architecture.md §4 Prompt 1 with schema validation + retry/repair",
-      "Streams signed document URLs from File/Document (§1) into the CORA sidecar",
-      "Persists findings + ambiguities to compliance ingestion issues so Ops Center can react"
+      "Validates certificate schema with automatic retry and repair on errors",
+      "Processes signed document URLs from the document storage system",
+      "Records parsing issues for operations team review"
     ],
     badge: "certificate_v1"
   },
@@ -25,22 +25,22 @@ const capabilities: Capability[] = [
     name: "Supplier Outreach Copilot",
     endpoint: "POST /ai/supplier-email",
     summary:
-      "Drafts localized RoHS/REACH chasers that cite missing certificates, due dates, and secure upload links per §4 Prompt 2.",
+      "Generates localized compliance request emails with missing certificate details, due dates, and secure upload links.",
     bullets: [
-      "Enriches prompts with supplier response averages + language from Architecture.md §3 data model",
-      "Calculates due dates (avg response + 2 days) so workflows stay SLA-aware",
-      "Logs model/tone metadata to audit_logs for downstream review"
+      "Personalizes emails using supplier response history and preferred language",
+      "Calculates realistic due dates based on supplier average response time plus buffer",
+      "Logs all generated content to audit trail for compliance review"
     ],
     badge: "localized outreach"
   },
   {
     name: "Risk Summary Bot",
     endpoint: "POST /ai/risk-summary",
-    summary: "Produces exec-ready summaries (traffic-light, supplier gaps, expirations) grounded in merged BOM data (§4 Prompt 3).",
+    summary: "Creates executive summaries highlighting compliance status, supplier gaps, and certificate expirations.",
     bullets: [
-      "Pulls Compliance status + Supplier KPIs from the dashboard snapshot",
-      "Expands calculations before emitting prose so reviewers can trace reasoning",
-      "Feeds results into RiskVisualization + alerting queues for end-to-end parity"
+      "Analyzes compliance metrics and supplier performance from dashboard data",
+      "Shows calculation steps for transparency and traceability",
+      "Integrates with risk visualization and alerting systems"
     ],
     badge: "risk synopsis"
   }
@@ -49,8 +49,8 @@ const capabilities: Capability[] = [
 export function CoraCapabilityGrid() {
   return (
     <SectionCard
-      title="CORA Capability Grid"
-      description="Surfaced endpoints + prompts from Architecture.md §4 so stakeholders can see what is wired today."
+      title="CORA AI Capabilities"
+      description="AI-powered compliance operations with document parsing, supplier outreach, and risk analysis."
     >
       <div className="grid gap-4 lg:grid-cols-3">
         {capabilities.map((capability) => (
