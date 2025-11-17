@@ -7,6 +7,7 @@
     { "path": "apps/worker" },
     { "path": "modules/gateway" },
     { "path": "modules/compliance" },
+    { "path": "modules/dashboard" },
     { "path": "modules/risk-impact" },
     { "path": "modules/supplier" },
     { "path": "modules/file-document" },
@@ -17,6 +18,7 @@
     { "path": "libs/config" },
     { "path": "libs/db" },
     { "path": "libs/logging" },
+    { "path": "libs/storage" },
     { "path": "libs/tracing" },
     { "path": "libs/test-utils" }
   ]

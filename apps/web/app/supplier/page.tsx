@@ -36,7 +36,7 @@ export default async function SupplierShowcasePage() {
         </div>
       </header>
 
-      <SupplierScorecards suppliers={snapshot.suppliers} />
+      <SupplierScorecards suppliers={snapshot.suppliers} bomId={snapshot.bom.id} />
 
       <div className="grid gap-8 lg:grid-cols-[3fr,2fr]">
         <SupplierScorecardProbe suppliers={snapshot.suppliers} />
@@ -47,4 +47,3 @@ export default async function SupplierShowcasePage() {
     </main>
   );
 }
-

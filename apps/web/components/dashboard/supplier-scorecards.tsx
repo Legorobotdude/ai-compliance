@@ -1,13 +1,26 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { SupplierSnapshot } from "@/lib/types/dashboard";
-import { getEmailPreview, type Locale } from "@/lib/i18n/email";
 import { SectionCard } from "@/components/ui/section-card";
 
 type SupplierScorecardsProps = {
   suppliers: SupplierSnapshot[];
+  bomId: string;
+};
+
+type DraftState =
+  | { status: "idle"; draft: null; error: null }
+  | { status: "loading"; draft: null; error: null }
+  | { status: "error"; draft: null; error: string }
+  | { status: "success"; draft: DraftPayload; error: null };
+
+type DraftPayload = {
+  subject: string;
+  body: string;
+  language: string;
+  dueDate?: string;
 };
 
 function Sparkline({ points }: { points: number[] }) {
@@ -37,26 +50,65 @@ function Sparkline({ points }: { points: number[] }) {
   );
 }
 
-function normalizeLocale(value: string): Locale {
+function normalizeLocale(value: string): "de" | "zh" | "en" {
   if (value === "de" || value === "zh") {
     return value;
   }
   return "en";
 }
 
-export function SupplierScorecards({ suppliers }: SupplierScorecardsProps) {
+export function SupplierScorecards({ suppliers, bomId }: SupplierScorecardsProps) {
   const [selected, setSelected] = useState<SupplierSnapshot | null>(suppliers[0] ?? null);
-  const emailPreview = useMemo(
-    () =>
-      selected
-        ? getEmailPreview(normalizeLocale(selected.language), {
-            supplier: selected.name,
-            missingCount: selected.requestsOpen,
-            regulation: "REACH / PFAS"
-          })
-        : null,
-    [selected]
-  );
+  const [draftState, setDraftState] = useState<DraftState>({ status: "idle", draft: null, error: null });
+  const locale = useMemo(() => (selected ? normalizeLocale(selected.language) : "en"), [selected]);
+
+  useEffect(() => {
+    setDraftState({ status: "idle", draft: null, error: null });
+  }, [selected?.supplierId]);
+
+  async function requestDraft() {
+    if (!selected) {
+      return;
+    }
+    setDraftState({ status: "loading", draft: null, error: null });
+    try {
+      const response = await fetch("/api/ai/supplier-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          supplierId: selected.supplierId,
+          bomId,
+          language: locale,
+          tone: "formal"
+        })
+      });
+      const payload = await safeJson(response);
+      if (!response.ok) {
+        const message =
+          payload &&
+          typeof payload === "object" &&
+          "error" in payload &&
+          typeof (payload as { error?: unknown }).error === "string"
+            ? (payload as { error: string }).error
+            : `Draft request failed (${response.status})`;
+        throw new Error(message);
+      }
+      const data = payload as DraftPayload;
+      setDraftState({
+        status: "success",
+        draft: {
+          subject: data.subject,
+          body: data.body,
+          language: data.language ?? locale,
+          dueDate: data.dueDate
+        },
+        error: null
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to request CORA draft";
+      setDraftState({ status: "error", draft: null, error: message });
+    }
+  }
 
   if (suppliers.length === 0 || !selected) {
     return (
@@ -110,23 +162,59 @@ export function SupplierScorecards({ suppliers }: SupplierScorecardsProps) {
         ))}
       </div>
 
-      {emailPreview ? (
-        <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-white">Localized email preview</p>
-              <p className="text-xs text-slate-400">
-                {selected.name} · Locale {emailPreview.locale.toUpperCase()}
-              </p>
-            </div>
-            <span className="rounded-full border border-slate-800 px-3 py-1 text-xs text-slate-400">CORA draft</span>
+      <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-white">CORA outreach draft</p>
+            <p className="text-xs text-slate-400">
+              {selected.name} · Locale {locale.toUpperCase()}
+              {draftState.draft?.dueDate ? ` · Due ${formatDueDate(draftState.draft.dueDate)}` : ""}
+            </p>
           </div>
-          <div className="mt-3 space-y-2 text-sm">
-            <p className="font-semibold text-brand-300">{emailPreview.subject}</p>
-            <pre className="whitespace-pre-wrap rounded-xl bg-slate-950/60 p-3 text-slate-200">{emailPreview.body}</pre>
-          </div>
+          <button
+            type="button"
+            onClick={requestDraft}
+            disabled={draftState.status === "loading"}
+            className="inline-flex items-center justify-center rounded-full border border-brand-400 px-4 py-2 text-xs font-semibold text-brand-200 transition hover:bg-brand-500/10 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
+          >
+            {draftState.status === "loading" ? "Drafting…" : "Draft with CORA"}
+          </button>
         </div>
-      ) : null}
+        {draftState.error ? <p className="mt-2 text-xs text-rose-300">{draftState.error}</p> : null}
+        {draftState.draft ? (
+          <div className="mt-3 space-y-2 text-sm">
+            <p className="font-semibold text-brand-300">{draftState.draft.subject}</p>
+            <pre className="whitespace-pre-wrap rounded-xl bg-slate-950/60 p-3 text-slate-200">
+              {draftState.draft.body}
+            </pre>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-slate-400">
+            Click “Draft with CORA” to request the latest localized outreach for this supplier.
+          </p>
+        )}
+      </div>
     </SectionCard>
   );
+}
+
+async function safeJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function formatDueDate(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
 }

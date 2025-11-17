@@ -175,7 +175,15 @@ export class DashboardRepository {
     return this.db.query<SupplierSummaryRecord>({
       text: `
         select
-          s.*,
+          s.id,
+          s.tenant_id as "tenantId",
+          s.name,
+          s.country,
+          s.language,
+          s.compliance_rate as "complianceRate",
+          s.response_avg_days as "responseAvgDays",
+          s.created_at as "createdAt",
+          s.updated_at as "updatedAt",
           coalesce(open_requests.count, 0)::int as "requestsOpen",
           last_request.sent_at as "lastRequestAt"
         from suppliers s
