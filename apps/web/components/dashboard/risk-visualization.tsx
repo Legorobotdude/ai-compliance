@@ -4,33 +4,50 @@ import {
   CartesianGrid,
   Line,
   LineChart,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
-  ScatterChart,
-  Scatter,
-  ZAxis,
-  Cell
+  Bar,
+  BarChart,
+  Legend
 } from "recharts";
 
 import type { RiskSummary } from "@/lib/types/dashboard";
 import { SectionCard } from "@/components/ui/section-card";
 
-const donutColors = ["#34d399", "#60a5fa", "#fbbf24", "#f87171"];
-
 type RiskVisualizationProps = {
   risk: RiskSummary;
 };
 
+// Helper function to determine bar color based on coverage percentage
+function getCoverageColor(percent: number): string {
+  if (percent >= 80) return "#34d399"; // green
+  if (percent >= 50) return "#fbbf24"; // yellow
+  return "#f87171"; // red
+}
+
 export function RiskVisualization({ risk }: RiskVisualizationProps) {
-  const frameworkData = risk.frameworks.map((framework) => ({
-    ...framework,
-    percent: Math.round(framework.percent * 100)
-  }));
+  // Sort frameworks by coverage (lowest first to highlight risks)
+  const frameworkData = risk.frameworks
+    .map((framework) => ({
+      ...framework,
+      percent: Math.round(framework.percent * 100),
+      fill: getCoverageColor(framework.percent * 100)
+    }))
+    .sort((a, b) => a.percent - b.percent);
+
   const topGaps = risk.gaps;
+
+  // Calculate dynamic Y-axis domain for trend chart
+  const trendScores = risk.trend.map(t => t.score);
+  const minScore = Math.min(...trendScores);
+  const maxScore = Math.max(...trendScores);
+  const padding = (maxScore - minScore) * 0.1 || 5; // 10% padding or minimum 5 points
+  const yAxisDomain = [
+    Math.max(0, Math.floor(minScore - padding)),
+    Math.min(100, Math.ceil(maxScore + padding))
+  ];
 
   return (
     <SectionCard
@@ -98,67 +115,135 @@ export function RiskVisualization({ risk }: RiskVisualizationProps) {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="h-64 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-          <p className="text-sm text-slate-400">Framework coverage</p>
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={frameworkData}
-                innerRadius={60}
-                outerRadius={90}
-                dataKey="percent"
-                nameKey="name"
-                paddingAngle={4}
-              >
-                {frameworkData.map((entry, index) => (
-                  <Cell key={entry.name} fill={donutColors[index % donutColors.length]} />
-                ))}
-              </Pie>
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Framework Coverage - Horizontal Bar Chart */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+          <div className="mb-4">
+            <p className="text-sm font-medium text-white">Framework Coverage</p>
+            <p className="text-xs text-slate-400 mt-1">Sorted by coverage (lowest risk first)</p>
+          </div>
+          <ResponsiveContainer width="100%" height={Math.max(200, frameworkData.length * 60)}>
+            <BarChart data={frameworkData} layout="vertical" margin={{ left: 20, right: 30 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+              <XAxis type="number" domain={[0, 100]} stroke="#94a3b8" tick={{ fill: "#94a3b8" }} />
+              <YAxis
+                type="category"
+                dataKey="name"
+                stroke="#94a3b8"
+                tick={{ fill: "#94a3b8", fontSize: 12 }}
+                width={150}
+              />
               <Tooltip
                 contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px" }}
+                itemStyle={{ color: "#ffffff" }}
+                labelStyle={{ color: "#ffffff" }}
                 formatter={(value: number) => `${value}%`}
               />
-            </PieChart>
+              <Bar dataKey="percent" radius={[0, 4, 4, 0]}>
+                {frameworkData.map((entry) => (
+                  <Bar key={entry.name} dataKey="percent" fill={entry.fill} />
+                ))}
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
+          <div className="mt-3 flex items-center gap-4 text-xs text-slate-400">
+            <div className="flex items-center gap-1.5">
+              <div className="h-3 w-3 rounded bg-red-400" />
+              <span>&lt;50% High Risk</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-3 w-3 rounded bg-yellow-400" />
+              <span>50-80% Medium</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-3 w-3 rounded bg-green-400" />
+              <span>&gt;80% Good</span>
+            </div>
+          </div>
         </div>
 
-        <div className="h-64 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-          <p className="text-sm text-slate-400">Risk trend (rolling 6 weeks)</p>
-          <ResponsiveContainer width="100%" height="100%">
+        {/* Risk Trend - Enhanced Line Chart */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+          <div className="mb-4">
+            <p className="text-sm font-medium text-white">Risk Trend</p>
+            <p className="text-xs text-slate-400 mt-1">Rolling 6-week performance</p>
+          </div>
+          <ResponsiveContainer width="100%" height={240}>
             <LineChart data={risk.trend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="label" stroke="#94a3b8" />
-              <YAxis stroke="#94a3b8" domain={[40, 95]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+              <XAxis
+                dataKey="label"
+                stroke="#94a3b8"
+                tick={{ fill: "#94a3b8", fontSize: 11 }}
+              />
+              <YAxis
+                stroke="#94a3b8"
+                domain={yAxisDomain}
+                tick={{ fill: "#94a3b8" }}
+                label={{ value: 'Risk Score (0-100)', angle: -90, position: 'insideLeft', fill: '#94a3b8', fontSize: 12 }}
+              />
               <Tooltip
                 contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px" }}
+                itemStyle={{ color: "#ffffff" }}
+                labelStyle={{ color: "#ffffff" }}
                 formatter={(value: number) => `${value}/100`}
               />
-              <Line type="monotone" dataKey="score" stroke="#60a5fa" strokeWidth={3} dot={false} />
+              <Line
+                type="monotone"
+                dataKey="score"
+                stroke="#60a5fa"
+                strokeWidth={3}
+                dot={{ fill: "#60a5fa", r: 4 }}
+                activeDot={{ r: 6 }}
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>
+      </div>
 
-        <div className="h-64 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-          <p className="text-sm text-slate-400">Supplier exposure map</p>
-          <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis type="number" dataKey="incidents" name="incidents" stroke="#94a3b8" />
-              <YAxis type="number" dataKey="exposure" name="exposure" stroke="#94a3b8" />
-              <ZAxis type="number" dataKey="exposure" range={[60, 200]} />
-              <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px" }} />
-              <Scatter
-                data={
-                  risk.supplierExposure.length
-                    ? risk.supplierExposure
-                    : [{ supplierName: "No incidents", incidents: 0, exposure: 0, supplierId: "none" }]
-                }
-                fill="#fbbf24"
-              />
-            </ScatterChart>
-          </ResponsiveContainer>
+      {/* Supplier Risk Table */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+        <div className="mb-4">
+          <p className="text-sm font-medium text-white">Highest Risk Suppliers</p>
+          <p className="text-xs text-slate-400 mt-1">Based on compliance incidents and parts exposure</p>
         </div>
+        {risk.supplierExposure.length === 0 ? (
+          <div className="py-8 text-center">
+            <p className="text-sm text-slate-400">No supplier risk data available</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-800">
+                  <th className="pb-3 text-left font-medium text-slate-300">Supplier</th>
+                  <th className="pb-3 text-right font-medium text-slate-300">Parts Exposure</th>
+                  <th className="pb-3 text-right font-medium text-slate-300">Incidents</th>
+                  <th className="pb-3 text-right font-medium text-slate-300">Risk Level</th>
+                </tr>
+              </thead>
+              <tbody>
+                {risk.supplierExposure
+                  .sort((a, b) => (b.incidents * b.exposure) - (a.incidents * a.exposure))
+                  .slice(0, 5)
+                  .map((supplier) => {
+                    const riskScore = supplier.incidents * supplier.exposure;
+                    const riskLevel = riskScore > 100 ? 'High' : riskScore > 50 ? 'Medium' : 'Low';
+                    const riskColor = riskLevel === 'High' ? 'text-red-400' : riskLevel === 'Medium' ? 'text-yellow-400' : 'text-green-400';
+
+                    return (
+                      <tr key={supplier.supplierId ?? supplier.supplierName} className="border-b border-slate-800/50">
+                        <td className="py-3 text-slate-200">{supplier.supplierName}</td>
+                        <td className="py-3 text-right text-slate-300">{supplier.exposure}</td>
+                        <td className="py-3 text-right text-slate-300">{supplier.incidents}</td>
+                        <td className={`py-3 text-right font-medium ${riskColor}`}>{riskLevel}</td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </SectionCard>
   );
