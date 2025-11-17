@@ -42,6 +42,8 @@ export interface ImpactPredictRequest {
   limitVector?: ImpactLimitOverride[];
   ttlMinutes?: number;
   bomId?: UUID;
+  supplierIds?: UUID[];
+  assemblyIds?: string[];
 }
 
 export interface ImpactPredictResponse {

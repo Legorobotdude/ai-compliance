@@ -788,6 +788,7 @@ async function upsertRegulations(client) {
       version: '2025',
       effectiveDate: '2025-01-01',
       limits: [
+        { substance: 'PFAS', limit: 50 },
         { substance: 'PFOA', limit: 50 },
         { substance: 'PFOS', limit: 40 }
       ]

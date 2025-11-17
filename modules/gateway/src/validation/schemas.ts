@@ -41,7 +41,9 @@ export const impactPredictSchema = z
     newLimitPpm: z.number().positive().optional(),
     limitVector: z.array(impactLimitOverrideSchema).min(1).optional(),
     ttlMinutes: z.number().int().positive().max(24 * 60).optional(),
-    bomId: uuid().optional()
+    bomId: uuid().optional(),
+    supplierIds: z.array(uuid()).min(1).optional(),
+    assemblyIds: z.array(z.string().min(1)).min(1).optional()
   })
   .refine((value) => Boolean(value.newLimitPpm || (value.limitVector?.length ?? 0) > 0), {
     message: 'Provide either newLimitPpm or limitVector',

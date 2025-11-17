@@ -16,7 +16,8 @@ import type {
   RiskSnapshot,
   SupplierGapSummary,
   SupplierExposurePoint,
-  SupplierRiskStat
+  SupplierRiskStat,
+  ImpactBaselineLimit
 } from '../dtos/impact-dtos.js';
 import { RiskRepository } from '../repositories/risk-repository';
 import { evaluateImpactScenario } from './impact-evaluator.js';
@@ -46,7 +47,10 @@ export class RiskImpactService {
 
   async predictImpact(request: ImpactPredictRequest): Promise<ImpactPredictResponse> {
     const regulationContext = await this.getRegulationContext(request.regulationCode);
-    const rows = await this.repository.fetchStatusRows(request.tenantId, request.bomId);
+    const rows = await this.repository.fetchStatusRows(request.tenantId, request.bomId, {
+      supplierIds: request.supplierIds,
+      assemblyIds: request.assemblyIds
+    });
     const overrides = this.resolveLimitVector(request, regulationContext);
     const evaluation = evaluateImpactScenario({
       rows,
@@ -182,6 +186,18 @@ export class RiskImpactService {
     });
 
     return snapshot;
+  }
+
+  async listRegulationOptions(limit = 10): Promise<Array<{ code: string; name: string; limits: ImpactBaselineLimit[] }>> {
+    const contexts = await this.repository.listRegulationContexts(limit);
+    return contexts.map((context) => ({
+      code: context.regulation.code,
+      name: context.regulation.name,
+      limits: context.limits.map((limit) => ({
+        substance: limit.substance,
+        limitPpm: limit.limitPpm
+      }))
+    }));
   }
 
   private resolveLimitVector(

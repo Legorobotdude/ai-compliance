@@ -15,6 +15,18 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const snapshot = await fetchDashboardSnapshot();
+  const supplierOptions = snapshot.suppliers.map((supplier) => ({
+    id: supplier.supplierId,
+    name: supplier.name
+  }));
+  const assemblyOptions = Array.from(
+    new Map(
+      snapshot.bom.items.map((item) => [
+        item.assemblyId,
+        { id: item.assemblyId, name: item.assemblyName ?? item.assemblyId }
+      ])
+    ).values()
+  );
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-10">
@@ -77,6 +89,9 @@ export default async function DashboardPage() {
         initialScenario={snapshot.impact}
         history={snapshot.impactHistory}
         freshness={snapshot.riskDataFreshness}
+        options={snapshot.impactOptions}
+        supplierOptions={supplierOptions}
+        assemblyOptions={assemblyOptions}
       />
       <AuditLogFeed entries={snapshot.auditLogs} />
       <RoleGate allow={["analyst", "admin"]} fallback={<LockedCard label="Ops Center" />}>

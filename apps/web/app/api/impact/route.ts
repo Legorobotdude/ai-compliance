@@ -9,6 +9,8 @@ type ImpactRoutePayload = {
   newLimitPpm?: number;
   limitVector?: Array<{ substance: string; limitPpm: number }>;
   bomId?: string;
+  supplierIds?: string[];
+  assemblyIds?: string[];
 };
 
 export async function POST(request: Request) {
@@ -18,7 +20,7 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "Request body is required" }, { status: 400 });
   }
-  const { regulationCode, newLimitPpm, limitVector, bomId } = payload ?? {};
+  const { regulationCode, newLimitPpm, limitVector, bomId, supplierIds, assemblyIds } = payload ?? {};
 
   const vector =
     Array.isArray(limitVector) && limitVector.length
@@ -42,7 +44,9 @@ export async function POST(request: Request) {
       regulationCode,
       bomId,
       ...(typeof newLimitPpm === "number" ? { newLimitPpm } : {}),
-      ...(vector && vector.length ? { limitVector: vector } : {})
+      ...(vector && vector.length ? { limitVector: vector } : {}),
+      ...(Array.isArray(supplierIds) && supplierIds.length ? { supplierIds } : {}),
+      ...(Array.isArray(assemblyIds) && assemblyIds.length ? { assemblyIds } : {})
     })
   });
 

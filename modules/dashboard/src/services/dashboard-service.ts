@@ -73,7 +73,7 @@ export class DashboardService {
     const bomItems = this.mapBomRows(bomRows);
     const statusMap = this.normalizeStatusCounts(statusCounts);
     const supplierSnapshots = this.mapSuppliers(suppliers, requestDurations);
-    const [risk, impact, impactHistory, riskDataFreshness] = await Promise.all([
+    const [risk, impact, impactHistory, riskDataFreshness, impactRegulations] = await Promise.all([
       this.riskService.getRiskAnalyticsSnapshot({
         tenantId,
         bomId,
@@ -84,7 +84,8 @@ export class DashboardService {
       }),
       this.buildImpactPreview(tenantId, bomId),
       this.riskService.listRecentImpactScenarios(tenantId, 5),
-      this.riskService.getRiskDataFreshness(tenantId)
+      this.riskService.getRiskDataFreshness(tenantId),
+      this.riskService.listRegulationOptions(6)
     ]);
     const auditEntries = auditLogs.map((log) => this.mapAuditLogEntry(log));
     const opsIssues = issues.map<OpsIssueDto>((issue) => ({
@@ -126,6 +127,10 @@ export class DashboardService {
       risk,
       impact,
       impactHistory,
+      impactOptions: {
+        defaultRegulation: this.defaultImpactRegulation,
+        regulations: impactRegulations
+      },
       auditLogs: auditEntries,
       ingestionIssues: opsIssues,
       slaLeaderboard,

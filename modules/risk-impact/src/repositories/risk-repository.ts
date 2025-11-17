@@ -30,8 +30,16 @@ export class RiskRepository {
     return { regulation, limits };
   }
 
-  async fetchStatusRows(tenantId: TenantID, bomId?: UUID): Promise<ComplianceStatusRow[]> {
-    return this.fetchComplianceRows(tenantId, bomId ? { bomIds: [bomId] } : undefined);
+  async fetchStatusRows(
+    tenantId: TenantID,
+    bomId?: UUID,
+    filters?: { supplierIds?: UUID[]; assemblyIds?: string[] }
+  ): Promise<ComplianceStatusRow[]> {
+    const combinedFilters = {
+      ...(bomId ? { bomIds: [bomId] } : {}),
+      ...(filters ?? {})
+    };
+    return this.fetchComplianceRows(tenantId, combinedFilters);
   }
 
   async fetchComplianceSnapshots(
@@ -129,16 +137,29 @@ export class RiskRepository {
     };
   }
 
-  async listLatestRegulations(limit: number): Promise<RegulationSummary[]> {
-    return this.db.query<RegulationSummary>({
+  async listLatestRegulations(limit: number): Promise<Regulation[]> {
+    return this.db.query<Regulation>({
       text: `
-        select id, code, name
+        select *
         from regulations
         order by effective_date desc
         limit $1
       `,
       values: [limit]
     });
+  }
+
+  async listRegulationContexts(limit: number): Promise<RegulationContext[]> {
+    const regs = await this.listLatestRegulations(limit);
+    const contexts: RegulationContext[] = [];
+    for (const reg of regs) {
+      const limits = await this.listLimits(reg.id);
+      contexts.push({
+        regulation: reg as Regulation,
+        limits
+      });
+    }
+    return contexts;
   }
 
   async countRegulationViolations(
@@ -232,7 +253,7 @@ export class RiskRepository {
     return rows[0] ?? null;
   }
 
-  private async listLimits(regulationId: UUID): Promise<RegulationLimit[]> {
+  async listLimits(regulationId: UUID): Promise<RegulationLimit[]> {
     return this.db.query<RegulationLimit>({
       text: `
         select
@@ -251,7 +272,7 @@ export class RiskRepository {
 
   private async fetchComplianceRows(
     tenantId: TenantID,
-    filters?: { bomIds?: UUID[] }
+    filters?: { bomIds?: UUID[]; supplierIds?: UUID[]; assemblyIds?: string[] }
   ): Promise<ComplianceStatusRow[]> {
     const { clause, values } = this.buildComplianceFilterClause(tenantId, filters);
     const rows = await this.db.query<DbComplianceStatusRow>({
@@ -275,13 +296,21 @@ export class RiskRepository {
 
   private buildComplianceFilterClause(
     tenantId: TenantID,
-    filters?: { bomIds?: UUID[] }
+    filters?: { bomIds?: UUID[]; supplierIds?: UUID[]; assemblyIds?: string[] }
   ): { clause: string; values: unknown[] } {
     const values: unknown[] = [tenantId];
     let clause = '';
     if (filters?.bomIds && filters.bomIds.length > 0) {
       clause += `and bom_id = any($${values.length + 1}::uuid[])`;
       values.push(filters.bomIds);
+    }
+    if (filters?.supplierIds && filters.supplierIds.length > 0) {
+      clause += ` and supplier_id = any($${values.length + 1}::uuid[])`;
+      values.push(filters.supplierIds);
+    }
+    if (filters?.assemblyIds && filters.assemblyIds.length > 0) {
+      clause += ` and assembly_id = any($${values.length + 1}::text[])`;
+      values.push(filters.assemblyIds);
     }
     return { clause, values };
   }
@@ -505,8 +534,6 @@ interface RiskDataFreshnessRow {
   supplierUpdatedAt?: string | null;
   scenarioUpdatedAt?: string | null;
 }
-
-type RegulationSummary = Pick<Regulation, 'id' | 'code' | 'name'>;
 
 interface RegulationViolationRow {
   violationParts: number;

@@ -3,7 +3,8 @@ import type {
   ImpactPredictResponse,
   ImpactScenarioRecord,
   RiskAnalyticsSnapshot,
-  RiskDataFreshness
+  RiskDataFreshness,
+  ImpactBaselineLimit
 } from '@certivo/risk-impact';
 
 export interface DashboardSnapshotDto {
@@ -21,6 +22,7 @@ export interface DashboardSnapshotDto {
   risk: RiskAnalyticsSnapshot;
   impact: ImpactPredictResponse;
   impactHistory: ImpactScenarioRecord[];
+  impactOptions: ImpactOptions;
   riskDataFreshness: RiskDataFreshness;
   auditLogs: AuditLogEntryDto[];
   ingestionIssues: OpsIssueDto[];
@@ -123,4 +125,13 @@ export interface SlaLeaderboardEntryDto {
   slaTargetDays: number;
   openWorkflows: number;
   escalations: number;
+}
+
+export interface ImpactOptions {
+  defaultRegulation: string;
+  regulations: Array<{
+    code: string;
+    name: string;
+    limits: ImpactBaselineLimit[];
+  }>;
 }
