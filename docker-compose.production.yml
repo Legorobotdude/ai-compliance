@@ -1,0 +1,213 @@
+version: '3.9'
+
+services:
+  # PostgreSQL with pgvector extension
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: certivo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: certivo
+      POSTGRES_USER: certivo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-certivo}
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U certivo -d certivo']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - certivo-network
+
+  # Redis for queues and caching
+  redis:
+    image: redis:7-alpine
+    container_name: certivo-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    command: ['redis-server', '--save', '60', '1', '--appendonly', 'yes']
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - certivo-network
+
+  # Temporal server (workflow orchestration)
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    container_name: certivo-temporal
+    restart: unless-stopped
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=certivo
+      - POSTGRES_PWD=${POSTGRES_PASSWORD:-certivo}
+      - POSTGRES_SEEDS=postgres
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    ports:
+      - '7233:7233'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - temporaldata:/etc/temporal
+    healthcheck:
+      test: ['CMD', 'tctl', '--address', 'temporal:7233', 'cluster', 'health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - certivo-network
+
+  # API Service (Express)
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: certivo-api
+    restart: unless-stopped
+    environment:
+      # Database
+      DATABASE_URL: postgres://certivo:${POSTGRES_PASSWORD:-certivo}@postgres:5432/certivo
+
+      # Auth
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
+      AUTH_ISSUER: ${AUTH_ISSUER:-https://auth.certivo}
+      AUTH_AUDIENCE: ${AUTH_AUDIENCE:-certivo-api}
+      AUTH_TENANT_CLAIM: ${AUTH_TENANT_CLAIM:-tenant_id}
+      AUTH_ROLES_CLAIM: ${AUTH_ROLES_CLAIM:-roles}
+      AUTH_EMAIL_CLAIM: ${AUTH_EMAIL_CLAIM:-email}
+      AUTH_JWKS_URL: ${AUTH_JWKS_URL:-}
+
+      # Temporal
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_SUPPLIER_TASK_QUEUE: ${TEMPORAL_SUPPLIER_TASK_QUEUE:-supplier-workflows}
+      TEMPORAL_INGESTION_TASK_QUEUE: ${TEMPORAL_INGESTION_TASK_QUEUE:-ingestion-retries}
+
+      # CORA integration
+      CORA_API_URL: http://cora:8082
+      CORA_API_KEY: ${CORA_API_KEY:-}
+      CORA_API_TIMEOUT_MS: ${CORA_API_TIMEOUT_MS:-10000}
+
+      # Document storage
+      DOCUMENTS_LOCAL_ROOT: /app/.certivo/documents
+      DOCUMENTS_PUBLIC_BASE_URL: ${DOCUMENTS_PUBLIC_BASE_URL:-http://localhost:4000}
+      DOCUMENTS_SIGNING_SECRET: ${DOCUMENTS_SIGNING_SECRET}
+      DOCUMENTS_DOWNLOAD_TTL_MS: ${DOCUMENTS_DOWNLOAD_TTL_MS:-300000}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: production
+
+      # Server
+      PORT: 4000
+    ports:
+      - '4000:4000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      cora:
+        condition: service_healthy
+    volumes:
+      - documents:/app/.certivo/documents
+    networks:
+      - certivo-network
+
+  # CORA AI Service (FastAPI + Python)
+  cora:
+    build:
+      context: .
+      dockerfile: apps/cora/Dockerfile
+    container_name: certivo-cora
+    restart: unless-stopped
+    environment:
+      # Database
+      CORA_DATABASE_URL: postgres://certivo:${POSTGRES_PASSWORD:-certivo}@postgres:5432/certivo
+
+      # OpenAI
+      CORA_OPENAI_API_KEY: ${CORA_OPENAI_API_KEY}
+      CORA_OPENAI_MODEL: ${CORA_OPENAI_MODEL:-gpt-4o-mini}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - '8082:8082'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - certivo-network
+
+  # Temporal Worker
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    container_name: certivo-worker
+    restart: unless-stopped
+    environment:
+      # Database
+      DATABASE_URL: postgres://certivo:${POSTGRES_PASSWORD:-certivo}@postgres:5432/certivo
+
+      # Temporal
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_SUPPLIER_TASK_QUEUE: ${TEMPORAL_SUPPLIER_TASK_QUEUE:-supplier-workflows}
+      TEMPORAL_INGESTION_TASK_QUEUE: ${TEMPORAL_INGESTION_TASK_QUEUE:-ingestion-retries}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    networks:
+      - certivo-network
+
+  # Web Service (Next.js)
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: certivo-web
+    restart: unless-stopped
+    environment:
+      # API connection
+      CERTIVO_API_URL: ${CERTIVO_API_URL:-http://api:4000}
+      CERTIVO_API_TOKEN: ${CERTIVO_API_TOKEN}
+
+      # Next.js
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: 1
+    ports:
+      - '3000:3000'
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - certivo-network
+
+volumes:
+  pgdata:
+  redisdata:
+  temporaldata:
+  documents:
+
+networks:
+  certivo-network:
+    driver: bridge

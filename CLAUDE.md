@@ -38,6 +38,30 @@ Services will be available at:
 - **Web**: http://localhost:3000
 - **CORA**: http://localhost:8082
 
+## Production Deployment
+
+For production deployment using Docker, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+Quick production deployment:
+
+```bash
+# Copy and configure production environment
+cp .env.production.example .env.production
+# Edit .env.production with your production values
+
+# Generate API token
+node infra/docker/generate-dev-token.mjs
+
+# Deploy all services
+./scripts/deploy.sh up
+```
+
+See the full deployment guide for:
+- Environment variable reference
+- Scaling strategies
+- Backup and restore procedures
+- Monitoring and troubleshooting
+
 ## Common Commands
 
 ### Development Setup
