@@ -102,3 +102,6 @@
 - Enabled Supplier Scorecards to push drafts into the workflow per Architecture.md §5 by adding tone controls, a send action that POSTs /api/supplier/request, and inline success/error feedback tied to CORA drafts.
 
 - Extended the BOM & Compliance Explorer (Architecture.md §6) so each expired row can draft a CORA email, show the localized preview inline, and only then trigger `/api/supplier/request`, mirroring the Supplier Scorecard review flow and capturing per-row success/error state.
+- Guarded the Risk/Impact supplier gap summary (Architecture.md §6) so expired certificates no longer override future `validUntil` dates; the dashboard’s Risk Visualization now shows the real next-expiry countdown instead of clamping negative deltas to `0d`.
+- Refreshed `v_compliance_status` (Architecture.md §6) to prioritize certificates that include ppm thresholds and fall back to regulation limits per substance, ensuring RiskImpactService can surface the sample data’s over-limit parts instead of defaulting to thresholdless REACH statements.
+- Updated `RiskImpactService` gap aggregation (Architecture.md §6) to treat expired-but-over-limit certificates as over-limit as long as the underlying findings exceed their thresholds, so supplier tiles reflect the true count of problematic parts.

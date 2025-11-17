@@ -392,11 +392,13 @@ export class RiskImpactService {
           overLimit: 0,
           nextExpiryDays: null
         };
+      const isOverLimit = row.status === 'OVER_LIMIT' || this.rowHasOverLimit(row);
       if (row.status === 'MISSING') {
         existing.missing += 1;
       } else if (row.status === 'EXPIRED') {
         existing.expired += 1;
-      } else if (row.status === 'OVER_LIMIT') {
+      }
+      if (isOverLimit) {
         existing.overLimit += 1;
       }
       if (row.validUntil) {
@@ -404,6 +406,7 @@ export class RiskImpactService {
         if (
           typeof days === 'number' &&
           Number.isFinite(days) &&
+          days >= 0 &&
           (existing.nextExpiryDays == null || days < existing.nextExpiryDays)
         ) {
           existing.nextExpiryDays = days;
@@ -433,6 +436,18 @@ export class RiskImpactService {
       .slice(0, limit);
 
     return summaries;
+  }
+  
+  private rowHasOverLimit(row: ComplianceStatusRow): boolean {
+    if (!Array.isArray(row.findings)) {
+      return false;
+    }
+    return row.findings.some((finding) => {
+      if (typeof finding?.ppm !== 'number' || typeof finding?.thresholdPpm !== 'number') {
+        return false;
+      }
+      return finding.ppm > finding.thresholdPpm;
+    });
   }
 
   private computeSupplierRiskPenalty(stats: SupplierRiskStat[]): number {
