@@ -1,17 +1,6 @@
 "use client";
 
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  Bar,
-  BarChart,
-  Legend
-} from "recharts";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Bar, BarChart } from "recharts";
 
 import type { RiskSummary } from "@/lib/types/dashboard";
 import { SectionCard } from "@/components/ui/section-card";

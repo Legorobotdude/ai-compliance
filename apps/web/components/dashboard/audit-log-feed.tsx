@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { AuditLogEntry } from "@/lib/types/dashboard";
 import { SectionCard } from "@/components/ui/section-card";
@@ -39,10 +39,21 @@ const categoryStyles: Record<Exclude<CategoryFilter, "ALL">, string> = {
 
 type AuditLogFeedProps = {
   entries: AuditLogEntry[];
+  title?: string;
+  description?: string;
+  initialFilter?: CategoryFilter;
 };
 
-export function AuditLogFeed({ entries }: AuditLogFeedProps) {
-  const [filter, setFilter] = useState<CategoryFilter>("ALL");
+export function AuditLogFeed({
+  entries,
+  title = "Audit Trail",
+  description = "Architecture §7 feed of compliance uploads, supplier workflows, and CORA traces.",
+  initialFilter = "ALL"
+}: AuditLogFeedProps) {
+  const [filter, setFilter] = useState<CategoryFilter>(initialFilter);
+  useEffect(() => {
+    setFilter(initialFilter);
+  }, [initialFilter]);
   const filteredEntries = useMemo(
     () => entries.filter((entry) => (filter === "ALL" ? true : entry.category === filter)),
     [filter, entries]
@@ -50,8 +61,8 @@ export function AuditLogFeed({ entries }: AuditLogFeedProps) {
 
   return (
     <SectionCard
-      title="Audit Trail"
-      description="Architecture §7 feed of compliance uploads, supplier workflows, and CORA traces."
+      title={title}
+      description={description}
       actions={
         <select
           className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-1 text-xs"

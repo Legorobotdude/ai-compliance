@@ -5,6 +5,9 @@ import { SectionCard } from "@/components/ui/section-card";
 
 type RunningJobsPanelProps = {
   jobs: WorkflowJob[];
+  title?: string;
+  description?: string;
+  emptyLabel?: string;
 };
 
 const workflowLabels: Record<WorkflowJob["workflow"], string> = {
@@ -20,11 +23,16 @@ const statusStyles: Record<WorkflowJob["status"], string> = {
   RETRYING: "bg-emerald-500/20 text-emerald-200"
 };
 
-export function RunningJobsPanel({ jobs }: RunningJobsPanelProps) {
+export function RunningJobsPanel({
+  jobs,
+  title = "Active Workflows",
+  description = "Real-time monitoring of supplier request workflows and data ingestion retry jobs.",
+  emptyLabel = "No active workflows detected 🎯"
+}: RunningJobsPanelProps) {
   return (
     <SectionCard
-      title="Active Workflows"
-      description="Real-time monitoring of supplier request workflows and data ingestion retry jobs."
+      title={title}
+      description={description}
     >
       <div className="space-y-3">
         {jobs.map((job) => {
@@ -65,7 +73,7 @@ export function RunningJobsPanel({ jobs }: RunningJobsPanelProps) {
             </article>
           );
         })}
-        {!jobs.length ? <p className="text-sm text-slate-500">No active workflows detected 🎯</p> : null}
+        {!jobs.length ? <p className="text-sm text-slate-500">{emptyLabel}</p> : null}
       </div>
     </SectionCard>
   );

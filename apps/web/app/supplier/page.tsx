@@ -1,9 +1,15 @@
 import Link from "next/link";
 
+import { BomExplorer } from "@/components/dashboard/bom-explorer";
 import { SupplierScorecards } from "@/components/dashboard/supplier-scorecards";
+import { SlaMonitor } from "@/components/dashboard/sla-monitor";
+import { AuditLogFeed } from "@/components/dashboard/audit-log-feed";
+import { RunningJobsPanel } from "@/components/ops-center/running-jobs-panel";
+import { RoleGate } from "@/components/rbac/role-gate";
 import { SupplierRequestConsole } from "@/components/supplier/supplier-request-console";
 import { SupplierScorecardProbe } from "@/components/supplier/supplier-scorecard-probe";
-import { SupplierWorkflowChecklist } from "@/components/supplier/supplier-workflow-checklist";
+import { SupplierOpsSummary } from "@/components/supplier/supplier-ops-summary";
+import { SupplierRiskInsights } from "@/components/supplier/supplier-risk-insights";
 import { fetchDashboardSnapshot } from "@/lib/api/dashboard";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +21,10 @@ export default async function SupplierShowcasePage() {
     externalId: snapshot.bom.externalId,
     productName: snapshot.bom.productName
   };
+  const supplierWorkflowJobs = snapshot.workflowJobs.filter((job) => job.workflow === "SUPPLIER_REQUEST");
+  const supplierAuditEntries = snapshot.auditLogs.filter((entry) =>
+    entry.category === "SUPPLIER" || entry.category === "WORKFLOW"
+  );
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-10">
@@ -23,7 +33,8 @@ export default async function SupplierShowcasePage() {
           <p className="text-sm uppercase tracking-widest text-brand-300">Supplier Management</p>
           <h1 className="mt-2 text-3xl font-semibold">Supplier Operations</h1>
           <p className="mt-2 text-slate-300">
-            Monitor supplier performance, send compliance requests via <code className="font-mono text-xs">/supplier/request</code> endpoint, and track request status.
+            Supplier module: monitor scorecards, orchestrate Temporal workflows, and trace
+            CORA-assisted outreach alongside BOM {snapshot.bom.externalId} ({snapshot.bom.productName}).
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -33,17 +44,63 @@ export default async function SupplierShowcasePage() {
           >
             ← Back to dashboard
           </Link>
+          <Link
+            href="/ops-center"
+            className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
+          >
+            Ops center
+          </Link>
+          <Link
+            href="/documents"
+            className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
+          >
+            Documents
+          </Link>
         </div>
       </header>
 
-      <SupplierScorecards suppliers={snapshot.suppliers} bomId={snapshot.bom.id} />
+      <SupplierOpsSummary suppliers={snapshot.suppliers} workflowJobs={snapshot.workflowJobs} bom={snapshot.bom} risk={snapshot.risk} />
 
-      <div className="grid gap-8 lg:grid-cols-[3fr,2fr]">
-        <SupplierScorecardProbe suppliers={snapshot.suppliers} />
-        <SupplierWorkflowChecklist bomExternalId={bomMeta.externalId} />
+      <div>
+        <SupplierScorecards suppliers={snapshot.suppliers} bomId={snapshot.bom.id} />
+        <SupplierRiskInsights risk={snapshot.risk} suppliers={snapshot.suppliers} />
       </div>
 
-      <SupplierRequestConsole suppliers={snapshot.suppliers} bom={bomMeta} />
+      <BomExplorer rows={snapshot.bom.items} suppliers={snapshot.suppliers} bomId={snapshot.bom.id} />
+
+      <div>
+        <SupplierScorecardProbe suppliers={snapshot.suppliers} />
+      </div>
+
+      <div className="grid gap-8 xl:grid-cols-[3fr,2fr]">
+        <SupplierRequestConsole suppliers={snapshot.suppliers} bom={bomMeta} />
+        <div className="space-y-8">
+          <RunningJobsPanel
+            jobs={supplierWorkflowJobs}
+            title="Supplier workflow pulse"
+            description="Live supplier reminders/escalations queued in the Temporal worker pool."
+            emptyLabel="No supplier workflows running 🎯"
+          />
+          <RoleGate allow={["admin"]} fallback={<LockedCard label="SLA leaderboard (admin only)" />}>
+            <SlaMonitor entries={snapshot.slaLeaderboard} />
+          </RoleGate>
+        </div>
+      </div>
+
+      <AuditLogFeed
+        entries={supplierAuditEntries}
+        title="Supplier activity feed"
+        description="Supplier + workflow entries pulled from the shared audit fabric."
+        initialFilter="SUPPLIER"
+      />
     </main>
+  );
+}
+
+function LockedCard({ label }: { label: string }) {
+  return (
+    <div className="card border-dashed border-slate-800 text-sm text-slate-400">
+      <p>{label} hidden for this role. Switch to Admin to unlock.</p>
+    </div>
   );
 }

@@ -173,7 +173,7 @@ export function SupplierRequestConsole({ suppliers, bom }: SupplierRequestConsol
             )}
           </pre>
           <p className="mt-2 text-xs text-slate-500">
-            Tenant + requestedBy automatically inject via the proxy route (see Architecture §5 workflow notes).
+            Tenant + requestedBy automatically inject via the proxy route.
           </p>
         </div>
 

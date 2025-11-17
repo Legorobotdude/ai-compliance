@@ -86,8 +86,8 @@ export function SupplierScorecardProbe({ suppliers }: SupplierScorecardProbeProp
 
   return (
     <SectionCard
-      title="Supplier Scorecard Tester"
-      description="Test the <code className='font-mono text-xs'>/supplier/scorecard</code> endpoint and verify supplier metrics."
+      title="Supplier Scorecard"
+      description="Test the /supplier/scorecard endpoint and verify supplier metrics."
       actions={
         <button
           type="button"
@@ -213,7 +213,7 @@ function BlockedPartsPanel({ parts }: { parts: SupplierBlockedPart[] }) {
           </div>
         ))}
         {parts.length > 12 ? (
-          <p className="text-xs text-slate-500">Showing 12 of {parts.length} parts. Use the CLI harness for the full set.</p>
+          <p className="text-xs text-slate-500">Showing 12 of {parts.length} parts. </p>
         ) : null}
       </div>
     </div>
