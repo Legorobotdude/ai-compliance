@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { SectionCard } from "@/components/ui/section-card";
-import { LabActionPanel, LabActionFeedback, postJson } from "@/components/lab/lab-utils";
+import { LabActionPanel, LabActionFeedback, postJson } from "@/components/cora/cora-utils";
 import { SAMPLE_DOCUMENT_IDS, SAMPLE_SUPPLIER_IDS } from "@/lib/testing/sample-payloads";
 
 type CoraPlaygroundProps = {

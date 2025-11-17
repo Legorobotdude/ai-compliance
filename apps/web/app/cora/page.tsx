@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { AuditLogFeed } from "@/components/dashboard/audit-log-feed";
-import { CoraPlayground } from "@/components/lab/cora-playground";
+import { CoraPlayground } from "@/components/cora/cora-playground";
 import { CoraCapabilityGrid } from "@/components/cora/cora-capability-grid";
 import { CoraPromptRecipes } from "@/components/cora/cora-prompt-recipes";
 import { GuardrailChecklist } from "@/components/cora/guardrail-checklist";
@@ -47,12 +47,6 @@ export default async function CoraShowcasePage() {
             className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
           >
             ← Back to dashboard
-          </Link>
-          <Link
-            href="/lab"
-            className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
-          >
-            Testing lab
           </Link>
         </div>
       </header>

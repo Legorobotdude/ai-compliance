@@ -32,12 +32,6 @@ export default async function RiskImpactShowcasePage() {
           >
             ← Back to dashboard
           </Link>
-          <Link
-            href="/lab"
-            className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
-          >
-            Compliance/CORA lab
-          </Link>
         </div>
       </header>
 
