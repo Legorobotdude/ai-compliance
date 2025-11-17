@@ -34,6 +34,7 @@ const columns: ColumnDef<DashboardBomRow>[] = [
   {
     header: "Part",
     accessorKey: "partNumber",
+    size: 180,
     cell: (info) => (
       <div>
         <p className="font-medium text-white">{info.getValue<string>()}</p>
@@ -46,11 +47,13 @@ const columns: ColumnDef<DashboardBomRow>[] = [
   {
     header: "Supplier",
     accessorFn: (row) => row.supplierName ?? "Unassigned",
+    size: 200,
     cell: (info) => <span>{info.getValue<string>()}</span>
   },
   {
     header: "Findings",
     accessorKey: "findings",
+    size: 380,
     cell: (info) => {
       const findings = info.getValue<DashboardBomRow["findings"]>();
       if (!findings.length) {
@@ -73,11 +76,17 @@ const columns: ColumnDef<DashboardBomRow>[] = [
   {
     header: "Status",
     accessorKey: "status",
-    cell: (info) => <span className={statusClass(info.getValue<BomStatus>())}>{info.getValue<string>()}</span>
+    size: 140,
+    cell: (info) => (
+      <div className="flex items-center">
+        <span className={statusClass(info.getValue<BomStatus>())}>{info.getValue<string>()}</span>
+      </div>
+    )
   },
   {
     header: "Valid until",
     accessorKey: "validUntil",
+    size: 120,
     cell: (info) =>
       info.getValue<string | undefined>()
         ? new Date(info.getValue<string>()).toLocaleDateString()
@@ -153,44 +162,49 @@ export function BomExplorer({ rows }: BomExplorerProps) {
             No BOM entries match the current filters.
           </div>
         ) : (
-          <>
-        <table className="min-w-full text-sm">
-          <thead className="sticky top-0 bg-slate-950/90 text-left text-xs uppercase tracking-wide text-slate-400 backdrop-blur">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="px-4 py-3">
-                    {flexRender(header.column.columnDef.header, header.getContext())}
-                  </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
-        </table>
-        <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
-          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-            const row = table.getRowModel().rows[virtualRow.index];
-            if (!row) return null;
-            return (
-              <table
-                key={row.id}
-                className="absolute left-0 top-0 w-full border-b border-slate-800/80 text-sm text-slate-200"
-                style={{ transform: `translateY(${virtualRow.start}px)` }}
-              >
-                <tbody>
-                  <tr>
+          <table className="w-full text-sm table-fixed">
+            <thead className="sticky top-0 bg-slate-950/90 text-left text-xs uppercase tracking-wide text-slate-400 backdrop-blur z-10">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <th
+                      key={header.id}
+                      className="px-4 py-3 font-medium"
+                      style={{ width: header.column.getSize() }}
+                    >
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+            <tbody style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const row = table.getRowModel().rows[virtualRow.index];
+                if (!row) return null;
+                return (
+                  <tr
+                    key={row.id}
+                    className="absolute left-0 top-0 w-full border-b border-slate-800/80 text-slate-200"
+                    style={{
+                      transform: `translateY(${virtualRow.start}px)`,
+                      height: `${virtualRow.size}px`
+                    }}
+                  >
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-3 align-top">
+                      <td
+                        key={cell.id}
+                        className="px-4 py-3 align-middle"
+                        style={{ width: cell.column.getSize() }}
+                      >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}
                   </tr>
-                </tbody>
-              </table>
-            );
-          })}
-        </div>
-          </>
+                );
+              })}
+            </tbody>
+          </table>
         )}
       </div>
     </SectionCard>
