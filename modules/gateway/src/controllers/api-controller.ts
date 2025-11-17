@@ -52,8 +52,18 @@ export class ApiController {
     res.status(201).json(result);
   }
 
-  async getMerged(req: HttpRequest<unknown, { bomId: string }>, res: HttpResponse) {
-    const payload: MergedViewRequest = { tenantId: req.tenantId, bomId: req.params.bomId as unknown as UUID };
+  async getMerged(
+    req: HttpRequest<unknown, { bomId: string }, { limit?: string; offset?: string; status?: string; query?: string }>,
+    res: HttpResponse
+  ) {
+    const payload: MergedViewRequest = {
+      tenantId: req.tenantId,
+      bomId: req.params.bomId as unknown as UUID,
+      limit: req.query.limit ? Number(req.query.limit) : undefined,
+      offset: req.query.offset ? Number(req.query.offset) : undefined,
+      status: req.query.status as MergedViewRequest['status'] | undefined,
+      query: req.query.query
+    };
     const result = await this.compliance.mergedStatus(payload);
     res.status(200).json(result);
   }

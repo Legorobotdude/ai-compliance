@@ -17,9 +17,21 @@ type MergedItem = {
   findings?: Finding[];
 };
 
+type ComplianceStatus = MergedItem['status'];
+
 type MergedBomResponse = {
   bomId: string;
   items: MergedItem[];
+  pagination: {
+    limit: number;
+    offset: number;
+    total: number;
+    hasMore: boolean;
+  };
+  summary: {
+    total: number;
+    counts: Record<ComplianceStatus, number>;
+  };
 };
 
 export async function GET(
@@ -32,8 +44,18 @@ export async function GET(
     return NextResponse.json({ error: 'bomId is required' }, { status: 400 });
   }
 
+  const url = new URL(request.url);
+  const searchParams = new URLSearchParams();
+  for (const key of ['limit', 'offset', 'status', 'query'] as const) {
+    const value = url.searchParams.get(key);
+    if (value) {
+      searchParams.set(key, value);
+    }
+  }
+  const path = searchParams.toString() ? `/merged/${bomId}?${searchParams.toString()}` : `/merged/${bomId}`;
+
   try {
-    const result = await certivoApiFetch<MergedBomResponse>(`/merged/${bomId}`);
+    const result = await certivoApiFetch<MergedBomResponse>(path);
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to fetch merged BOM';

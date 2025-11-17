@@ -26,9 +26,25 @@ interface MergedItem {
   findings?: Finding[];
 }
 
+interface PaginationMeta {
+  limit: number;
+  offset: number;
+  total: number;
+  hasMore: boolean;
+}
+
+type StatusCounts = Record<ComplianceStatus, number>;
+
+interface SummaryMeta {
+  total: number;
+  counts: StatusCounts;
+}
+
 interface MergedBomResponse {
   bomId: string;
   items: MergedItem[];
+  pagination: PaginationMeta;
+  summary: SummaryMeta;
 }
 
 const statusColors: Record<ComplianceStatus, string> = {
@@ -45,14 +61,40 @@ const statusIcons: Record<ComplianceStatus, string> = {
   OVER_LIMIT: '⚠',
 };
 
+const DEFAULT_STATUS_COUNTS: StatusCounts = {
+  COMPLIANT: 0,
+  MISSING: 0,
+  EXPIRED: 0,
+  OVER_LIMIT: 0,
+};
+
+const PAGE_SIZES = [50, 100, 250] as const;
+
 export function MergedBomView({ bomId, refreshKey }: MergedBomViewProps) {
   const [data, setData] = useState<MergedBomResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ComplianceStatus | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(PAGE_SIZES[1]);
 
   const parentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim());
+    }, 300);
+
+    return () => {
+      clearTimeout(handle);
+    };
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [bomId, statusFilter, debouncedQuery]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -60,14 +102,34 @@ export function MergedBomView({ bomId, refreshKey }: MergedBomViewProps) {
       setError(null);
 
       try {
-        const res = await fetch(`/api/compliance/merged/${bomId}`);
+        const params = new URLSearchParams();
+        params.set('limit', String(pageSize));
+        params.set('offset', String((page - 1) * pageSize));
+        if (statusFilter !== 'ALL') {
+          params.set('status', statusFilter);
+        }
+        if (debouncedQuery) {
+          params.set('query', debouncedQuery);
+        }
+
+        const res = await fetch(`/api/compliance/merged/${bomId}?${params.toString()}`);
 
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(errorData.error || `Failed to fetch merged BOM (${res.status})`);
         }
 
-        const response = await res.json() as MergedBomResponse;
+        const response = (await res.json()) as MergedBomResponse;
+        const totalPagesFromResponse =
+          response.pagination.total > 0
+            ? Math.ceil(response.pagination.total / response.pagination.limit)
+            : 1;
+
+        if (page > totalPagesFromResponse) {
+          setPage(totalPagesFromResponse);
+          return;
+        }
+
         setData(response);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load data');
@@ -77,19 +139,21 @@ export function MergedBomView({ bomId, refreshKey }: MergedBomViewProps) {
     };
 
     fetchData();
-  }, [bomId, refreshKey]);
+  }, [bomId, refreshKey, page, pageSize, statusFilter, debouncedQuery]);
 
-  const filteredItems = data?.items.filter((item) => {
-    const matchesStatus = statusFilter === 'ALL' || item.status === statusFilter;
-    const matchesSearch =
-      !searchQuery ||
-      item.partNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.assemblyId.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesStatus && matchesSearch;
-  }) || [];
+  const items = data?.items ?? [];
+  const summaryCounts = data?.summary?.counts ?? DEFAULT_STATUS_COUNTS;
+  const overallTotal = data?.summary?.total ?? 0;
+  const pagination = data?.pagination;
+  const filteredTotal = pagination?.total ?? 0;
+  const rangeStart = pagination && items.length > 0 ? pagination.offset + 1 : 0;
+  const rangeEnd = pagination ? pagination.offset + items.length : 0;
+  const totalPages = pagination ? Math.max(1, Math.ceil(pagination.total / pagination.limit)) : 1;
+  const canGoPrevious = page > 1;
+  const canGoNext = Boolean(pagination?.hasMore);
 
   const virtualizer = useVirtualizer({
-    count: filteredItems.length,
+    count: items.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 80,
     overscan: 5,
@@ -111,18 +175,13 @@ export function MergedBomView({ bomId, refreshKey }: MergedBomViewProps) {
     );
   }
 
-  if (!data || data.items.length === 0) {
+  if (!data) {
     return (
       <div className="p-4 bg-gray-50 border border-slate-700 rounded-md text-center">
         <p className="text-slate-400">No BOM data available</p>
       </div>
     );
   }
-
-  const statusCounts = data.items.reduce((acc, item) => {
-    acc[item.status] = (acc[item.status] || 0) + 1;
-    return acc;
-  }, {} as Record<ComplianceStatus, number>);
 
   return (
     <div className="space-y-4">
@@ -136,7 +195,7 @@ export function MergedBomView({ bomId, refreshKey }: MergedBomViewProps) {
               : 'border-slate-700 hover:border-slate-700'
           }`}
         >
-          <div className="text-2xl font-bold text-slate-400">{data.items.length}</div>
+          <div className="text-2xl font-bold text-slate-400">{overallTotal}</div>
           <div className="text-xs text-slate-400">Total Parts</div>
         </button>
 
@@ -152,7 +211,7 @@ export function MergedBomView({ bomId, refreshKey }: MergedBomViewProps) {
               }`}
             >
               <div className="text-2xl font-bold">
-                {statusIcons[status]} {statusCounts[status] || 0}
+                {statusIcons[status]} {summaryCounts[status] || 0}
               </div>
               <div className="text-xs capitalize">{status.replace('_', ' ')}</div>
             </button>
@@ -161,22 +220,44 @@ export function MergedBomView({ bomId, refreshKey }: MergedBomViewProps) {
       </div>
 
       {/* Search and Filters */}
-      <div className="flex gap-3">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search by part number or assembly..."
-          className="flex-1 px-3 py-2 border border-slate-700 rounded-md focus:ring-2 focus:ring-brand-400 focus:border-transparent"
-        />
-        {statusFilter !== 'ALL' && (
-          <button
-            onClick={() => setStatusFilter('ALL')}
-            className="px-4 py-2 text-sm text-slate-400 hover:text-slate-400"
+      <div className="flex flex-col gap-3 md:flex-row md:items-center">
+        <div className="flex flex-1 gap-3">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by part number or assembly..."
+            className="flex-1 px-3 py-2 border border-slate-700 rounded-md focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+          />
+          {(statusFilter !== 'ALL' || searchQuery) && (
+            <button
+              onClick={() => {
+                setStatusFilter('ALL');
+                setSearchQuery('');
+              }}
+              className="px-4 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-md transition"
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          Rows per page
+          <select
+            value={pageSize}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setPage(1);
+            }}
+            className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-400"
           >
-            Clear Filter
-          </button>
-        )}
+            {PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Virtualized Table */}
@@ -192,7 +273,7 @@ export function MergedBomView({ bomId, refreshKey }: MergedBomViewProps) {
           }}
         >
           {virtualizer.getVirtualItems().map((virtualRow) => {
-            const item = filteredItems[virtualRow.index];
+            const item = items[virtualRow.index];
             if (!item) return null;
             return (
               <div
@@ -261,8 +342,35 @@ export function MergedBomView({ bomId, refreshKey }: MergedBomViewProps) {
       </div>
 
       {/* Results Count */}
-      <div className="text-sm text-slate-400 text-center">
-        Showing {filteredItems.length} of {data.items.length} parts
+      <div className="flex flex-col gap-3 text-sm text-slate-400 md:flex-row md:items-center md:justify-between">
+        <div>
+          {filteredTotal === 0
+            ? 'No parts match the current filters.'
+            : `Showing ${rangeStart}-${rangeEnd} of ${filteredTotal} parts${
+                statusFilter !== 'ALL' ? ` (${statusFilter.toLowerCase()})` : ''
+              }`}
+        </div>
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+          <span>
+            Page {filteredTotal === 0 ? 0 : page} of {filteredTotal === 0 ? 0 : totalPages}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={!canGoPrevious}
+              className="rounded-full border border-slate-700 px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-500"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setPage((current) => current + 1)}
+              disabled={!canGoNext}
+              className="rounded-full border border-slate-700 px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-500"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

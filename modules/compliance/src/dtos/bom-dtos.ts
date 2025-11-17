@@ -38,14 +38,30 @@ export interface BomUploadResponse {
   issues: Array<{ code: string; message: string; partNumber?: string }>;
 }
 
+export type ComplianceStatus = ComplianceStatusRow['status'];
+
 export interface MergedViewRequest {
   tenantId: TenantID;
   bomId: UUID;
+  limit?: number;
+  offset?: number;
+  status?: ComplianceStatus;
+  query?: string;
 }
 
 export interface MergedViewResponse {
   bomId: UUID;
   items: ComplianceStatusRow[];
+  pagination: {
+    limit: number;
+    offset: number;
+    total: number;
+    hasMore: boolean;
+  };
+  summary: {
+    total: number;
+    counts: Record<ComplianceStatus, number>;
+  };
 }
 
 export interface IngestionIssueInput {

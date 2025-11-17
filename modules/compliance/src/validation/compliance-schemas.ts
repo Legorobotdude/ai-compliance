@@ -147,10 +147,16 @@ export const certificateUploadResponseSchema = z
   })
   .strict() satisfies z.ZodType<CertificateUploadResponse>;
 
+const complianceStatusEnum = z.enum(['COMPLIANT', 'MISSING', 'EXPIRED', 'OVER_LIMIT']);
+
 export const mergedViewRequestSchema = z
   .object({
     tenantId: tenantId(),
-    bomId: uuid()
+    bomId: uuid(),
+    limit: z.number().int().min(25).max(500).optional(),
+    offset: z.number().int().min(0).optional(),
+    status: complianceStatusEnum.optional(),
+    query: z.string().trim().min(1).optional()
   })
   .strict() satisfies z.ZodType<MergedViewRequest>;
 
@@ -168,7 +174,7 @@ const mergedViewItemSchema = z
     assemblyId: nonEmpty(),
     partNumber: nonEmpty(),
     supplierId: uuid().optional().nullable(),
-    status: z.enum(['COMPLIANT', 'MISSING', 'EXPIRED', 'OVER_LIMIT']),
+    status: complianceStatusEnum,
     validUntil: nullableString(),
     findings: z.array(mergedViewFindingSchema).optional()
   })
@@ -177,7 +183,21 @@ const mergedViewItemSchema = z
 export const mergedViewResponseSchema = z
   .object({
     bomId: uuid(),
-    items: z.array(mergedViewItemSchema)
+    items: z.array(mergedViewItemSchema),
+    pagination: z
+      .object({
+        limit: z.number().int().positive(),
+        offset: z.number().int().nonnegative(),
+        total: z.number().int().nonnegative(),
+        hasMore: z.boolean()
+      })
+      .strict(),
+    summary: z
+      .object({
+        total: z.number().int().nonnegative(),
+        counts: z.record(complianceStatusEnum, z.number().int().nonnegative())
+      })
+      .strict()
   })
   .strict() satisfies z.ZodType<MergedViewResponse>;
 

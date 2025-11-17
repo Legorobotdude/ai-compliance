@@ -102,8 +102,18 @@ export class ComplianceService {
   }
 
   async mergedView(request: MergedViewRequest): Promise<MergedViewResponse> {
-    const items = await this.repo.fetchMergedView(request.tenantId, request.bomId);
-    return { bomId: request.bomId, items };
+    const result = await this.repo.fetchMergedView(request.tenantId, request.bomId, {
+      limit: request.limit,
+      offset: request.offset,
+      status: request.status,
+      query: request.query
+    });
+    return {
+      bomId: request.bomId,
+      items: result.items,
+      pagination: result.pagination,
+      summary: result.summary
+    };
   }
 
   async getBomAggregate(tenantId: TenantID, bomId: UUID) {

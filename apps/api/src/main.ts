@@ -263,7 +263,11 @@ function buildApp(options: BuildAppOptions): Express {
     '/merged/:bomId',
     route('GET /merged/:bomId', async (req, res) => {
       validateWithSchema(uuidSchema(), req.params.bomId);
-      const httpReq = buildHttpRequest<unknown, { bomId: string }>(req);
+      const httpReq = buildHttpRequest<
+        unknown,
+        { bomId: string },
+        { limit?: string; offset?: string; status?: string; query?: string }
+      >(req);
       await controller.getMerged(httpReq, createHttpResponse(res));
     })
   );

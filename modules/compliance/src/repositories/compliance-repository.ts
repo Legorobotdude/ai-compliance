@@ -18,6 +18,17 @@ export interface BomAggregate {
   components: BomComponent[];
 }
 
+type ComplianceStatus = ComplianceStatusRow['status'];
+
+interface FetchMergedViewOptions {
+  limit?: number;
+  offset?: number;
+  status?: ComplianceStatus;
+  query?: string;
+}
+
+const COMPLIANCE_STATUSES: ComplianceStatus[] = ['COMPLIANT', 'MISSING', 'EXPIRED', 'OVER_LIMIT'];
+
 export class ComplianceRepository {
   constructor(private readonly db: DatabaseClient) {}
 
@@ -60,11 +71,98 @@ export class ComplianceRepository {
     return { bom, subassemblies, components };
   }
 
-  async fetchMergedView(tenantId: TenantID, bomId: UUID): Promise<ComplianceStatusRow[]> {
-    return this.db.query<ComplianceStatusRow>({
-      text: `select * from v_compliance_status where tenant_id = $1 and bom_id = $2`,
-      values: [tenantId, bomId]
+  async fetchMergedView(
+    tenantId: TenantID,
+    bomId: UUID,
+    options: FetchMergedViewOptions = {}
+  ): Promise<{
+    items: ComplianceStatusRow[];
+    pagination: { limit: number; offset: number; total: number; hasMore: boolean };
+    summary: { total: number; counts: Record<ComplianceStatus, number> };
+  }> {
+    const limit = Math.min(Math.max(options.limit ?? 100, 25), 500);
+    const offset = Math.max(options.offset ?? 0, 0);
+    const query = options.query?.trim();
+
+    const baseConditions = [`tenant_id = $1`, `bom_id = $2`];
+    const baseValues: Array<TenantID | UUID | string> = [tenantId, bomId];
+    let nextIndex = 3;
+
+    if (query) {
+      baseConditions.push(`(part_number ilike $${nextIndex} or assembly_id ilike $${nextIndex})`);
+      baseValues.push(`%${query}%`);
+      nextIndex += 1;
+    }
+
+    const summaryCountsRows = await this.db.query<{ status: ComplianceStatus; count: number }>({
+      text: `
+        select status, count(*)::int as count
+        from v_compliance_status
+        where ${baseConditions.join(' and ')}
+        group by status
+      `,
+      values: baseValues
     });
+
+    const summaryCounts: Record<ComplianceStatus, number> = COMPLIANCE_STATUSES.reduce(
+      (acc, status) => {
+        acc[status] = 0;
+        return acc;
+      },
+      {} as Record<ComplianceStatus, number>
+    );
+    for (const row of summaryCountsRows) {
+      summaryCounts[row.status] = row.count;
+    }
+    const summaryTotal = Object.values(summaryCounts).reduce((total, count) => total + count, 0);
+
+    const dataConditions = [...baseConditions];
+    const dataValues = [...baseValues];
+    let dataIndex = nextIndex;
+
+    if (options.status) {
+      dataConditions.push(`status = $${dataIndex}`);
+      dataValues.push(options.status);
+      dataIndex += 1;
+    }
+
+    const totalRows = await this.db.query<{ total: number }>({
+      text: `
+        select count(*)::int as total
+        from v_compliance_status
+        where ${dataConditions.join(' and ')}
+      `,
+      values: dataValues
+    });
+    const total = totalRows[0]?.total ?? 0;
+
+    const items = await this.db.query<ComplianceStatusRow>({
+      text: `
+        select *
+        from v_compliance_status
+        where ${dataConditions.join(' and ')}
+        order by part_number asc, assembly_id asc
+        limit $${dataIndex}
+        offset $${dataIndex + 1}
+      `,
+      values: [...dataValues, limit, offset]
+    });
+
+    const hasMore = offset + items.length < total;
+
+    return {
+      items,
+      pagination: {
+        limit,
+        offset,
+        total,
+        hasMore
+      },
+      summary: {
+        total: summaryTotal,
+        counts: summaryCounts
+      }
+    };
   }
 
   async findComponentSuppliers(tenantId: TenantID, partNumbers: string[]): Promise<Map<string, UUID[]>> {
