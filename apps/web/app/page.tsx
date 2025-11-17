@@ -68,7 +68,7 @@ export default async function DashboardPage() {
         </div>
       </header>
 
-      <BomExplorer rows={snapshot.bom.items} />
+      <BomExplorer rows={snapshot.bom.items} suppliers={snapshot.suppliers} bomId={snapshot.bom.id} />
       <SupplierScorecards suppliers={snapshot.suppliers} bomId={snapshot.bom.id} />
       <RiskVisualization risk={snapshot.risk} />
       <ImpactSimulator

@@ -100,3 +100,5 @@
 - Rewired the Supplier Scorecards UI to call CORA for outreach drafts per Architecture.md §5: the card now passes the current BOM ID to /api/ai/supplier-email, lets ops trigger drafts via a button, surfaces loading/error states, and renders the returned subject/body instead of mock previews.
 
 - Enabled Supplier Scorecards to push drafts into the workflow per Architecture.md §5 by adding tone controls, a send action that POSTs /api/supplier/request, and inline success/error feedback tied to CORA drafts.
+
+- Extended the BOM & Compliance Explorer (Architecture.md §6) so each expired row can draft a CORA email, show the localized preview inline, and only then trigger `/api/supplier/request`, mirroring the Supplier Scorecard review flow and capturing per-row success/error state.
