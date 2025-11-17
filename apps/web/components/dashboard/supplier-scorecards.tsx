@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import type { SupplierRequestResult, SupplierRequestTone } from "@certivo/supplier";
+
 import type { SupplierSnapshot } from "@/lib/types/dashboard";
 import { SectionCard } from "@/components/ui/section-card";
 
@@ -22,6 +24,12 @@ type DraftPayload = {
   language: string;
   dueDate?: string;
 };
+
+type SendState =
+  | { status: "idle"; error: null }
+  | { status: "sending"; error: null }
+  | { status: "error"; error: string }
+  | { status: "success"; error: null };
 
 function Sparkline({ points }: { points: number[] }) {
   const path = useMemo(() => {
@@ -60,10 +68,15 @@ function normalizeLocale(value: string): "de" | "zh" | "en" {
 export function SupplierScorecards({ suppliers, bomId }: SupplierScorecardsProps) {
   const [selected, setSelected] = useState<SupplierSnapshot | null>(suppliers[0] ?? null);
   const [draftState, setDraftState] = useState<DraftState>({ status: "idle", draft: null, error: null });
+  const [sendState, setSendState] = useState<SendState>({ status: "idle", error: null });
+  const [requestResult, setRequestResult] = useState<SupplierRequestResult | null>(null);
+  const [tone, setTone] = useState<SupplierRequestTone>("formal");
   const locale = useMemo(() => (selected ? normalizeLocale(selected.language) : "en"), [selected]);
 
   useEffect(() => {
     setDraftState({ status: "idle", draft: null, error: null });
+    setSendState({ status: "idle", error: null });
+    setRequestResult(null);
   }, [selected?.supplierId]);
 
   async function requestDraft() {
@@ -107,6 +120,43 @@ export function SupplierScorecards({ suppliers, bomId }: SupplierScorecardsProps
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to request CORA draft";
       setDraftState({ status: "error", draft: null, error: message });
+    }
+  }
+
+  async function sendWorkflowRequest() {
+    if (!selected) {
+      return;
+    }
+    setSendState({ status: "sending", error: null });
+    setRequestResult(null);
+    try {
+      const response = await fetch("/api/supplier/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          supplierId: selected.supplierId,
+          bomId,
+          tone,
+          languageOverride: locale,
+          dueAt: draftState.draft?.dueDate
+        })
+      });
+      const payload = await safeJson(response);
+      if (!response.ok) {
+        const message =
+          payload &&
+          typeof payload === "object" &&
+          "error" in payload &&
+          typeof (payload as { error?: unknown }).error === "string"
+            ? (payload as { error: string }).error
+            : `Failed to schedule workflow (${response.status})`;
+        throw new Error(message);
+      }
+      setRequestResult(payload as SupplierRequestResult);
+      setSendState({ status: "success", error: null });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to schedule supplier workflow";
+      setSendState({ status: "error", error: message });
     }
   }
 
@@ -163,7 +213,7 @@ export function SupplierScorecards({ suppliers, bomId }: SupplierScorecardsProps
       </div>
 
       <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm font-semibold text-white">CORA outreach draft</p>
             <p className="text-xs text-slate-400">
@@ -171,16 +221,50 @@ export function SupplierScorecards({ suppliers, bomId }: SupplierScorecardsProps
               {draftState.draft?.dueDate ? ` · Due ${formatDueDate(draftState.draft.dueDate)}` : ""}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={requestDraft}
-            disabled={draftState.status === "loading"}
-            className="inline-flex items-center justify-center rounded-full border border-brand-400 px-4 py-2 text-xs font-semibold text-brand-200 transition hover:bg-brand-500/10 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
-          >
-            {draftState.status === "loading" ? "Drafting…" : "Draft with CORA"}
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <label className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
+              Tone
+              <select
+                value={tone}
+                onChange={(event) => setTone(event.currentTarget.value as SupplierRequestTone)}
+                className="rounded-2xl border border-slate-800 bg-slate-950 px-3 py-1 text-sm text-white"
+              >
+                <option value="formal">Formal</option>
+                <option value="neutral">Neutral</option>
+                <option value="friendly">Friendly</option>
+              </select>
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={requestDraft}
+                disabled={draftState.status === "loading"}
+                className="inline-flex items-center justify-center rounded-full border border-brand-400 px-4 py-2 text-xs font-semibold text-brand-200 transition hover:bg-brand-500/10 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
+              >
+                {draftState.status === "loading" ? "Drafting…" : "Draft with CORA"}
+              </button>
+              <button
+                type="button"
+                onClick={sendWorkflowRequest}
+                disabled={sendState.status === "sending" || !draftState.draft}
+                className="inline-flex items-center justify-center rounded-full border border-emerald-400 px-4 py-2 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-600"
+              >
+                {sendState.status === "sending" ? "Sending…" : "Send via workflow"}
+              </button>
+            </div>
+          </div>
         </div>
         {draftState.error ? <p className="mt-2 text-xs text-rose-300">{draftState.error}</p> : null}
+        {sendState.error ? <p className="mt-1 text-xs text-rose-300">{sendState.error}</p> : null}
+        {sendState.status === "success" && requestResult ? (
+          <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs text-emerald-200">
+            <p className="font-semibold text-emerald-200">Workflow queued</p>
+            <p className="mt-1 text-emerald-100">
+              Request {requestResult.requestId} · status {requestResult.status} · Due{" "}
+              {formatDueDate(requestResult.dueAt)}
+            </p>
+          </div>
+        ) : null}
         {draftState.draft ? (
           <div className="mt-3 space-y-2 text-sm">
             <p className="font-semibold text-brand-300">{draftState.draft.subject}</p>

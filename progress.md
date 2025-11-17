@@ -98,3 +98,5 @@
 - Restored real supplier scorecard metrics per Architecture.md §1 by aliasing suppliers columns in DashboardRepository.listSuppliers so compliance rates and average response times populate in the dashboard snapshot.
 
 - Rewired the Supplier Scorecards UI to call CORA for outreach drafts per Architecture.md §5: the card now passes the current BOM ID to /api/ai/supplier-email, lets ops trigger drafts via a button, surfaces loading/error states, and renders the returned subject/body instead of mock previews.
+
+- Enabled Supplier Scorecards to push drafts into the workflow per Architecture.md §5 by adding tone controls, a send action that POSTs /api/supplier/request, and inline success/error feedback tied to CORA drafts.
