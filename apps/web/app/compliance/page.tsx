@@ -31,7 +31,8 @@ export default function CompliancePage() {
           <p className="text-sm uppercase tracking-widest text-brand-300">Compliance Operations</p>
           <h1 className="mt-2 text-3xl font-semibold">BOM & Certificate Ingestion</h1>
           <p className="mt-2 text-slate-300">
-            Upload Bill of Materials and compliance certificates, view merged compliance status, and track data quality issues
+            Upload Bill of Materials and compliance certificates, view merged compliance status, and review ingestion
+            issues surfaced by the Compliance Service.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -79,14 +80,22 @@ export default function CompliancePage() {
       )}
 
       {/* Ingestion Issues - Analyst/Admin only */}
-      <RoleGate allow={['analyst', 'admin']}>
+      <RoleGate allow={['analyst', 'admin']} fallback={<LockedIssuesCard />}>
         <SectionCard
           title="Ingestion Issues"
-          description="Missing data and supplier gaps requiring attention"
+          description="Live backlog of Compliance Service ingestion issues that need analyst or admin intervention."
         >
           <IngestionIssuesPanel refreshKey={refreshKey} />
         </SectionCard>
       </RoleGate>
     </main>
+  );
+}
+
+function LockedIssuesCard() {
+  return (
+    <div className="card border-dashed border-slate-800 text-sm text-slate-400">
+      <p>Ingestion issues require Analyst/Admin privileges. Switch roles via the selector to inspect ingestion alerts.</p>
+    </div>
   );
 }

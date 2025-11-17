@@ -1,83 +1,62 @@
+
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+
+import type { OpsIssue } from '@/lib/types/dashboard';
 
 interface IngestionIssuesPanelProps {
   refreshKey?: number;
 }
 
-interface IngestionIssue {
-  id: string;
-  tenantId: string;
-  sourceType: 'BOM' | 'CERTIFICATE';
-  sourceBomId?: string | null;
-  sourceCertificateId?: string | null;
-  issueType: 'MISSING_SUPPLIER' | 'MISSING_VALUE' | 'INVALID_UNIT' | 'PARSE_ERROR';
-  partNumber?: string | null;
-  substanceName?: string | null;
-  message: string;
-  resolved: boolean;
-  createdAt: string;
-  resolvedAt?: string | null;
-}
+type SeverityFilter = 'all' | OpsIssue['severity'];
 
-interface IngestionIssuesResponse {
-  issues: IngestionIssue[];
-  total: number;
-}
-
-const issueTypeColors = {
-  MISSING_SUPPLIER: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-  MISSING_VALUE: 'bg-orange-100 text-orange-800 border-orange-300',
-  INVALID_UNIT: 'bg-red-100 text-red-300 border-red-300',
-  PARSE_ERROR: 'bg-purple-100 text-purple-800 border-purple-300',
+const severityBadgeStyles: Record<OpsIssue['severity'], string> = {
+  critical: 'border-red-500/60 bg-red-500/10 text-red-200',
+  warning: 'border-amber-400/60 bg-amber-500/10 text-amber-200',
+  info: 'border-slate-600 bg-slate-800 text-slate-200',
 };
 
-const issueTypeLabels = {
-  MISSING_SUPPLIER: 'Missing Supplier',
-  MISSING_VALUE: 'Missing Value',
-  INVALID_UNIT: 'Invalid Unit',
-  PARSE_ERROR: 'Parse Error',
+const severityLabels: Record<OpsIssue['severity'], string> = {
+  critical: 'Critical',
+  warning: 'Warning',
+  info: 'Info',
 };
 
 export function IngestionIssuesPanel({ refreshKey }: IngestionIssuesPanelProps) {
-  const [data, setData] = useState<IngestionIssuesResponse | null>(null);
+  const [issues, setIssues] = useState<OpsIssue[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showResolved, setShowResolved] = useState(false);
+  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  const loadIssues = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/dashboard/snapshot', { cache: 'no-store' });
+
+      if (!res.ok) {
+        throw new Error(`Failed to fetch dashboard snapshot (${res.status})`);
+      }
+
+      const response = await res.json();
+      const snapshotIssues: OpsIssue[] =
+        response.ingestionIssues || response.ingestion?.issues || [];
+
+      setIssues(snapshotIssues);
+      setLastUpdated(new Date());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load issues');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        // In a real implementation, this would fetch from /api/compliance/issues
-        // For now, we'll use the dashboard snapshot which includes ingestion issues
-        const res = await fetch('/api/dashboard/snapshot');
-
-        if (!res.ok) {
-          throw new Error(`Failed to fetch dashboard snapshot (${res.status})`);
-        }
-
-        const response = await res.json();
-
-        // Extract ingestion issues from dashboard data
-        const issues: IngestionIssue[] = response.ingestion?.issues || [];
-
-        setData({
-          issues,
-          total: issues.length,
-        });
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load issues');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [refreshKey]);
+    loadIssues();
+  }, [loadIssues, refreshKey]);
 
   if (loading) {
     return (
@@ -95,111 +74,134 @@ export function IngestionIssuesPanel({ refreshKey }: IngestionIssuesPanelProps) 
     );
   }
 
-  const filteredIssues = data?.issues.filter((issue) =>
-    showResolved ? true : !issue.resolved
-  ) || [];
+  const filteredIssues = issues.filter((issue) =>
+    severityFilter === 'all' ? true : issue.severity === severityFilter
+  );
 
-  const unresolvedCount = data?.issues.filter(i => !i.resolved).length || 0;
-  const resolvedCount = data?.issues.filter(i => i.resolved).length || 0;
+  const severityCounts = issues.reduce(
+    (acc, issue) => {
+      acc[issue.severity] = (acc[issue.severity] || 0) + 1;
+      return acc;
+    },
+    { critical: 0, warning: 0, info: 0 } as Record<OpsIssue['severity'], number>
+  );
 
   return (
     <div className="space-y-4">
-      {/* Header Stats */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-4">
-          <div>
-            <div className="text-2xl font-bold text-orange-400">{unresolvedCount}</div>
-            <div className="text-xs text-slate-400">Open Issues</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-green-400">{resolvedCount}</div>
-            <div className="text-xs text-slate-400">Resolved</div>
-          </div>
+      {/* Header + refresh */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-2xl font-bold text-white">{issues.length}</div>
+          <div className="text-xs text-slate-400">Active ingestion issues</div>
         </div>
+        <div className="flex items-center gap-3 text-xs text-slate-400">
+          {lastUpdated && (
+            <span>Updated {lastUpdated.toLocaleTimeString()}</span>
+          )}
+          <button
+            type="button"
+            onClick={loadIssues}
+            disabled={loading}
+            className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200 transition hover:border-brand-400 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
+      </div>
 
-        <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showResolved}
-            onChange={(e) => setShowResolved(e.target.checked)}
-            className="rounded border-slate-700 text-brand-400 focus:ring-brand-400"
-          />
-          Show Resolved
-        </label>
+      {/* Severity filters */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setSeverityFilter('all')}
+          className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
+            severityFilter === 'all'
+              ? 'border-brand-400 bg-brand-500/10 text-white'
+              : 'border-slate-700 text-slate-400 hover:border-slate-500'
+          }`}
+        >
+          <div className="text-base font-semibold">All</div>
+          <div>{issues.length} total</div>
+        </button>
+        {(Object.keys(severityLabels) as OpsIssue['severity'][]).map((severity) => (
+          <button
+            key={severity}
+            type="button"
+            onClick={() => setSeverityFilter(severity)}
+            className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
+              severityFilter === severity
+                ? `${severityBadgeStyles[severity]} shadow-[0_0_18px_rgba(14,165,233,0.15)]`
+                : 'border-slate-700 text-slate-400 hover:border-slate-500'
+            }`}
+          >
+            <div className="text-base font-semibold">
+              {severityLabels[severity]}
+            </div>
+            <div>{severityCounts[severity]} issues</div>
+          </button>
+        ))}
       </div>
 
       {/* Issues List */}
       {filteredIssues.length === 0 ? (
-        <div className="p-8 bg-gray-50 border border-slate-700 rounded-md text-center">
-          <p className="text-slate-400">
-            {showResolved
-              ? 'No issues found'
-              : '✓ No unresolved issues - all clear!'}
-          </p>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-8 text-center text-slate-400">
+          {issues.length === 0
+            ? '✓ Compliance ingestion is clean—no issues from the latest snapshot.'
+            : 'No issues match this filter.'}
         </div>
       ) : (
-        <div className="space-y-2 max-h-96 overflow-y-auto">
+        <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
           {filteredIssues.map((issue) => (
             <div
               key={issue.id}
-              className={`p-4 border rounded-lg ${
-                issue.resolved ? 'bg-gray-50 border-slate-700' : 'bg-slate-900 border-slate-700'
-              }`}
+              className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  {/* Issue Type Badge */}
-                  <div className="flex items-center gap-2 mb-2">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                     <span
-                      className={`px-2 py-1 text-xs font-medium rounded border ${
-                        issueTypeColors[issue.issueType]
-                      }`}
+                      className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase ${severityBadgeStyles[issue.severity]}`}
                     >
-                      {issueTypeLabels[issue.issueType]}
+                      {issue.severity}
                     </span>
-                    <span className="text-xs text-slate-400">
-                      {issue.sourceType}
-                    </span>
-                    {issue.resolved && (
-                      <span className="text-xs px-2 py-1 bg-green-900/30 text-green-300 rounded">
-                        ✓ Resolved
+                    <span className="font-mono text-slate-300">{issue.code}</span>
+                    {issue.partNumber && (
+                      <span className="rounded bg-slate-800 px-2 py-0.5 font-mono text-[10px]">
+                        Part {issue.partNumber}
                       </span>
                     )}
                   </div>
-
-                  {/* Message */}
-                  <p className="text-sm text-slate-400 mb-2">{issue.message}</p>
-
-                  {/* Details */}
-                  <div className="flex flex-wrap gap-3 text-xs text-slate-400">
-                    {issue.partNumber && (
-                      <span className="font-mono bg-slate-700 px-2 py-0.5 rounded">
-                        Part: {issue.partNumber}
-                      </span>
+                  <p className="mt-2 text-sm text-slate-200">{issue.message}</p>
+                  <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-400">
+                    {issue.bomId && (
+                      <span className="font-mono text-slate-500">BOM {issue.bomId.slice(0, 8)}…</span>
                     )}
-                    {issue.substanceName && (
-                      <span className="font-mono bg-slate-700 px-2 py-0.5 rounded">
-                        Substance: {issue.substanceName}
-                      </span>
+                    {issue.assemblyId && (
+                      <span className="font-mono text-slate-500">Assembly {issue.assemblyId}</span>
                     )}
-                    <span className="text-slate-400">
-                      {new Date(issue.createdAt).toLocaleString()}
-                    </span>
+                    <span>{new Date(issue.createdAt).toLocaleString()}</span>
                   </div>
                 </div>
-
-                {/* Action Button */}
-                {!issue.resolved && (
+                <div className="flex flex-col items-end gap-2">
                   <button
-                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                    type="button"
+                    className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200 transition hover:border-brand-400"
                     onClick={() => {
-                      // In real implementation, this would trigger a resolution workflow
-                      console.log('Resolve issue:', issue.id);
+                      console.info('Open workflow for issue', issue.id);
                     }}
                   >
-                    Resolve
+                    Open workflow
                   </button>
-                )}
+                  <button
+                    type="button"
+                    className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-400 transition hover:border-slate-500"
+                    onClick={() => {
+                      console.info('Acknowledge issue', issue.id);
+                    }}
+                  >
+                    Acknowledge
+                  </button>
+                </div>
               </div>
             </div>
           ))}
