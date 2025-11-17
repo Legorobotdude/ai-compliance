@@ -12,11 +12,38 @@ import type {
 import { DocumentRepository } from '../repositories/document-repository';
 import { DocumentUrlSigner } from './document-url-signer.js';
 
+export interface DocumentRagIngestPayload {
+  tenantId: Document['tenantId'];
+  document: Document;
+  content: string;
+  mime: string;
+}
+
+export interface DocumentRagIngestor {
+  ingest(payload: DocumentRagIngestPayload): Promise<void>;
+}
+
+export interface DocumentServiceOptions {
+  ragIngestor?: DocumentRagIngestor;
+  maxIngestBytes?: number;
+}
+
+const DEFAULT_MAX_INGEST_BYTES = 750 * 1024; // ~750KB per Architecture.md §1 guidance on lightweight uploads.
+const TEXT_MIME_PREFIXES = ['text/'];
+const TEXT_MIME_TYPES = new Set([
+  'application/json',
+  'application/xml',
+  'application/xhtml+xml',
+  'application/csv',
+  'application/vnd.ms-excel'
+]);
+
 export class DocumentService {
   constructor(
     private readonly repository: DocumentRepository,
     private readonly storage: StorageAdapter,
-    private readonly signer: DocumentUrlSigner
+    private readonly signer: DocumentUrlSigner,
+    private readonly options: DocumentServiceOptions = {}
   ) {}
 
   async upload(payload: UploadRequest): Promise<Document> {
@@ -31,13 +58,16 @@ export class DocumentService {
     let storageBucket: string | null = null;
     let storageKey: string | null = null;
     let storageClass: string | null = null;
+    let inlineBuffer: Buffer | null = null;
 
     if (payload.dataBase64) {
-      const buffer = Buffer.from(payload.dataBase64, 'base64');
-      if (buffer.byteLength !== payload.bytes) {
-        throw new Error(`Provided bytes (${payload.bytes}) do not match decoded payload (${buffer.byteLength})`);
+      inlineBuffer = Buffer.from(payload.dataBase64, 'base64');
+      if (inlineBuffer.byteLength !== payload.bytes) {
+        throw new Error(
+          `Provided bytes (${payload.bytes}) do not match decoded payload (${inlineBuffer.byteLength})`
+        );
       }
-      const sha256 = createHash('sha256').update(buffer).digest('hex');
+      const sha256 = createHash('sha256').update(inlineBuffer).digest('hex');
       if (sha256 !== payload.sha256.toLowerCase()) {
         throw new Error('Provided sha256 hash does not match decoded payload');
       }
@@ -46,7 +76,7 @@ export class DocumentService {
         documentId,
         filename: payload.filename,
         contentType: payload.mime,
-        data: buffer
+        data: inlineBuffer
       });
       storageUrl = saved.url;
       storageBucket = saved.bucket;
@@ -81,7 +111,9 @@ export class DocumentService {
       parsedJson: null
     };
 
-    return this.repository.insert(document);
+    const inserted = await this.repository.insert(document);
+    this.enqueueRagIngest(inserted, payload, inlineBuffer);
+    return inserted;
   }
 
   async fetch(request: FetchRequest): Promise<Document | null> {
@@ -151,4 +183,42 @@ export class DocumentService {
     }
     return document.storageUrl.startsWith('file://');
   }
+
+  private enqueueRagIngest(document: Document, payload: UploadRequest, buffer: Buffer | null) {
+    if (!this.options.ragIngestor || !buffer) {
+      return;
+    }
+    if (!isTextLikeMime(payload.mime)) {
+      return;
+    }
+    const maxBytes = this.options.maxIngestBytes ?? DEFAULT_MAX_INGEST_BYTES;
+    if (buffer.byteLength > maxBytes) {
+      console.warn(
+        `Skipping RAG ingest for document ${document.id}; payload size ${buffer.byteLength} exceeds limit ${maxBytes}`
+      );
+      return;
+    }
+    const content = buffer.toString('utf8').trim();
+    if (!content) {
+      return;
+    }
+    void this.options.ragIngestor
+      .ingest({
+        tenantId: document.tenantId,
+        document,
+        content,
+        mime: payload.mime
+      })
+      .catch((error) => {
+        console.error(`Failed to enqueue RAG ingest for document ${document.id}`, error);
+      });
+  }
+}
+
+function isTextLikeMime(mime: string): boolean {
+  if (!mime) {
+    return false;
+  }
+  const lower = mime.toLowerCase();
+  return TEXT_MIME_PREFIXES.some((prefix) => lower.startsWith(prefix)) || TEXT_MIME_TYPES.has(lower);
 }

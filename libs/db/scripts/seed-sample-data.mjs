@@ -66,6 +66,210 @@ function normalizeWeight(weightMg, weightG) {
   return null;
 }
 
+const EMBEDDING_DIMENSION = 1536;
+const FNV_OFFSET = 2166136261;
+const FNV_PRIME = 16777619;
+
+function deterministicEmbedding(text) {
+  const tokens = text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+  const vector = new Array(EMBEDDING_DIMENSION).fill(0);
+  if (tokens.length === 0) {
+    return vector;
+  }
+  for (const token of tokens) {
+    let hash = FNV_OFFSET;
+    for (let index = 0; index < token.length; index += 1) {
+      hash ^= token.charCodeAt(index);
+      hash = (hash * FNV_PRIME) >>> 0;
+    }
+    const bucket = hash % EMBEDDING_DIMENSION;
+    vector[bucket] += 1;
+  }
+  const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+  if (magnitude === 0) {
+    return vector;
+  }
+  return vector.map((value) => value / magnitude);
+}
+
+function vectorToSql(vector) {
+  return `[${vector.map((value) => Number(value.toFixed(6))).join(',')}]`;
+}
+
+function chunkTextForRag(text) {
+  const normalized = text.replace(/\r\n/g, '\n').trim();
+  if (!normalized) {
+    return [];
+  }
+  const paragraphs = normalized.split(/\n{2,}/).map((paragraph) => paragraph.trim()).filter(Boolean);
+  if (paragraphs.length === 0) {
+    return [
+      {
+        content: normalized,
+        tokenCount: normalized.split(/\s+/).filter(Boolean).length
+      }
+    ];
+  }
+  const maxChars = 900;
+  const minChars = 400;
+  const segments = [];
+  let buffer = '';
+  const flush = () => {
+    if (buffer.trim()) {
+      const trimmed = buffer.trim();
+      segments.push({
+        content: trimmed,
+        tokenCount: trimmed.split(/\s+/).filter(Boolean).length
+      });
+    }
+    buffer = '';
+  };
+  for (const paragraph of paragraphs) {
+    if (!buffer) {
+      buffer = paragraph;
+      continue;
+    }
+    const next = `${buffer}\n\n${paragraph}`;
+    if (next.length > maxChars && buffer.length >= minChars) {
+      flush();
+      buffer = paragraph;
+      continue;
+    }
+    if (paragraph.length > maxChars) {
+      const midpoint = Math.floor(paragraph.length / 2);
+      const first = paragraph.slice(0, midpoint).trim();
+      const second = paragraph.slice(midpoint).trim();
+      if (first) {
+        buffer = buffer ? `${buffer}\n\n${first}` : first;
+        flush();
+      }
+      buffer = second;
+      continue;
+    }
+    buffer = next;
+  }
+  if (buffer) {
+    flush();
+  }
+  return segments;
+}
+
+function buildRagDocuments(sample) {
+  const rohsBullets = sample.rohsRows
+    .slice(0, 5)
+    .map(
+      (row) =>
+        `• Part ${row.partNumber} reports ${row.substance || 'unknown'} at ${
+          row.concentration ?? 'n/a'
+        }${row.unit || ''} vs threshold ${row.thresholdPpm ?? 'n/a'} ppm`
+    )
+    .join('\n');
+  const reachBullets = sample.reachParts
+    .slice(0, 5)
+    .map(
+      (part) =>
+        `• ${part.partNumber} declaration ${part.declarationDate || 'unknown'} includes ${
+          part.substances?.map((s) => `${s.name} ${s.concentration ?? '?'}${s.unit || ''}`).join(', ') || 'no substances listed'
+        }`
+    )
+    .join('\n');
+
+  return [
+    {
+      sourceKey: 'regulation:pfas-rohs-brief',
+      title: 'PFAS & RoHS enforcement brief',
+      sourceType: 'REGULATION',
+      sourceUrl: 'https://regulations.example.com/pfas-rohs',
+      content: `EU market surveillance teams continue to highlight PFAS and RoHS non-conformances across industrial controllers.
+Priority substances are tied to the Industrial Smart Hub v2 BOM along with the default 1000 ppm heavy metal thresholds.
+
+Key inspectorate notes:
+${rohsBullets}
+
+Recommended action is to refresh certificates for any part exceeding buffer <5% from the limit and document PFAS disclosures in supplier outreach templates.`
+    },
+    {
+      sourceKey: 'documents:acme-cert-intelligence',
+      title: 'Certificate intelligence digest',
+      sourceType: 'DOCUMENT',
+      sourceUrl: 'https://docs.example.com/acme/intel',
+      content: `CORA summarized the latest REACH XML packets plus CSV declarations uploaded for the Industrial Smart Hub program.
+Focus is on suppliers tied to CU-78901, WM-88211, and BP-44001 where mixed units and missing values triggered ingestion issues.
+
+Highlights:
+${reachBullets}
+
+Suppliers with delayed responses should receive the outreach template referenced in Architecture.md §4 with PFAS flags appended to the bullet list.`
+    }
+  ];
+}
+
+async function seedRagDocuments(client, tenantId, sample) {
+  const documents = buildRagDocuments(sample);
+  for (const doc of documents) {
+    const segments = chunkTextForRag(doc.content);
+    if (!segments.length) {
+      continue;
+    }
+    const tokenCount = segments.reduce((sum, segment) => sum + segment.tokenCount, 0);
+    const chunkCount = segments.length;
+    const checksum = crypto.createHash('sha256').update(doc.content).digest('hex');
+    const result = await client.query(
+      `insert into regulation_embeddings.documents
+         (tenant_id, source_key, title, source_type, checksum, token_count, chunk_count, status, metadata, indexed_at)
+       values ($1, $2, $3, $4, $5, $6, $7, 'READY', $8::jsonb, now())
+       on conflict (tenant_id, source_key)
+       do update set
+         title = excluded.title,
+         source_type = excluded.source_type,
+         checksum = excluded.checksum,
+         token_count = excluded.token_count,
+         chunk_count = excluded.chunk_count,
+         status = excluded.status,
+         metadata = excluded.metadata,
+         indexed_at = excluded.indexed_at
+       returning id`,
+      [
+        tenantId,
+        doc.sourceKey,
+        doc.title,
+        doc.sourceType,
+        checksum,
+        tokenCount,
+        chunkCount,
+        JSON.stringify({ seed: true, sourceUrl: doc.sourceUrl })
+      ]
+    );
+    const documentId = result.rows[0].id;
+    await client.query('delete from regulation_embeddings.chunks where tenant_id = $1 and document_id = $2', [
+      tenantId,
+      documentId
+    ]);
+    for (const [index, segment] of segments.entries()) {
+      await client.query(
+        `insert into regulation_embeddings.chunks
+           (id, tenant_id, document_id, content, source_url, embedding, metadata, chunk_index, token_count)
+         values ($1, $2, $3, $4, $5, $6::vector, '{}'::jsonb, $7, $8)`,
+        [
+          deterministicUuid(`${doc.sourceKey}:chunk:${index}`),
+          tenantId,
+          documentId,
+          segment.content,
+          doc.sourceUrl ?? null,
+          vectorToSql(deterministicEmbedding(segment.content)),
+          index,
+          segment.tokenCount
+        ]
+      );
+    }
+  }
+}
+
 function parseRohsCsv(csvText) {
   const lines = csvText.trim().split(/\r?\n/);
   const [, ...rows] = lines;
@@ -642,6 +846,7 @@ async function seed() {
     const partSupplierCodes = buildPartSupplierMap();
     await upsertCertificates(client, tenantId, supplierMap, partSupplierCodes, sample.rohsRows, sample.reachParts, documents);
     await upsertIngestionIssues(client, tenantId, bomId);
+    await seedRagDocuments(client, tenantId, sample);
     await client.query('commit');
     console.info(`Seeded sample tenant ${tenantId} with BOM ${sample.bom.bom_id}`);
   } catch (error) {

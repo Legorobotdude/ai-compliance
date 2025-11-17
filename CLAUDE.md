@@ -10,6 +10,34 @@ Certivo is an AI-powered compliance platform built as a **modular monolith**. Th
 
 **Architecture Philosophy:** Ship as a modular monolith with strict module boundaries and dependency injection. Each module has explicit interfaces serving as future "extraction seams" for microservices if needed.
 
+## Quick Start
+
+Complete development setup in 5 steps:
+
+```bash
+# 1. Start infrastructure (Postgres + Redis)
+cd infra/docker && docker compose up -d && cd ../..
+
+# 2. Set up database
+pnpm db:migrate
+pnpm db:seed
+
+# 3. Generate JWT token
+node infra/docker/generate-dev-token.mjs
+
+# 4. Configure environment (add token from step 3 and OpenAI key)
+cp .dev.env.example .dev.env
+# Edit .dev.env: set CERTIVO_API_TOKEN and CORA_OPENAI_API_KEY
+
+# 5. Start all services
+pnpm dev
+```
+
+Services will be available at:
+- **API**: http://localhost:4000
+- **Web**: http://localhost:3000
+- **CORA**: http://localhost:8082
+
 ## Common Commands
 
 ### Development Setup
@@ -31,6 +59,14 @@ node infra/docker/generate-dev-token.mjs
 ### Running Applications
 
 ```bash
+# RECOMMENDED: Start all services at once (API, Web, CORA, Worker)
+# First, create .dev.env from .dev.env.example and fill in required values
+cp .dev.env.example .dev.env
+# Edit .dev.env and add CERTIVO_API_TOKEN and CORA_OPENAI_API_KEY
+pnpm dev
+
+# OR start services individually:
+
 # Start API server (port 4000)
 export DATABASE_URL="postgres://certivo:certivo@localhost:5432/certivo"
 export AUTH_JWT_SECRET="dev-secret"
@@ -42,6 +78,12 @@ pnpm --filter @certivo/api dev
 export CERTIVO_API_URL="http://localhost:4000"
 export CERTIVO_API_TOKEN="<token-from-generate-dev-token>"
 pnpm --filter @certivo/web dev
+
+# Start CORA FastAPI sidecar (port 8082)
+cd apps/cora && uv run cora --reload
+
+# Start Temporal worker
+pnpm --filter @certivo/worker dev
 
 # Build all packages
 pnpm build
@@ -60,6 +102,24 @@ pnpm --filter @certivo/{module-name} build
 pnpm --filter @certivo/{module-name} dev
 ```
 
+### Smoke Tests
+
+End-to-end tests for validating module functionality:
+
+```bash
+# Test BOM upload, cert ingestion, and CORA AI endpoints
+pnpm lab:test
+
+# Test risk/impact prediction and regulation limit simulation
+pnpm risk:test
+
+# Test supplier scorecard and workflow functionality (requires implementation)
+# node scripts/supplier-smoke.mjs
+
+# Test Temporal workflow execution (requires Temporal running)
+# node scripts/temporal-smoke.mjs
+```
+
 ## Technology Stack
 
 ### Backend
@@ -68,6 +128,14 @@ pnpm --filter @certivo/{module-name} dev
 - **PostgreSQL** with pgvector extension (multi-tenant, shared-schema RLS)
 - **Redis** for queues and caching (in-dev only)
 - **pg** client for raw SQL (no ORM)
+- **Temporal** for workflow orchestration (supplier requests, ingestion retries)
+
+### CORA AI (Python Sidecar)
+- **Python 3.11+** with **uv** for package management
+- **FastAPI** for HTTP endpoints
+- **Pydantic** for schema validation
+- **OpenAI SDK** for LLM interactions
+- **psycopg2** for direct Postgres access
 
 ### Frontend
 - **Next.js 14** (React 18, App Router)
@@ -76,7 +144,8 @@ pnpm --filter @certivo/{module-name} dev
 - **Recharts** for visualizations
 
 ### Validation & Auth
-- **Zod** for schema validation
+- **Zod** for schema validation (Node.js)
+- **Pydantic** for schema validation (Python)
 - **Jose** for JWT verification (OAuth2.1, JWKS or HS256)
 
 ### Observability
@@ -89,11 +158,16 @@ pnpm --filter @certivo/{module-name} dev
 
 ```
 /apps              → Deployable applications (api, web, worker, cora)
+  /api             → Express REST API server (port 4000)
+  /web             → Next.js dashboard/UI (port 3000)
+  /worker          → Temporal workflow worker
+  /cora            → Python FastAPI sidecar for LLM operations (port 8082)
 /modules           → Domain modules (compliance, supplier, dashboard, etc.)
 /libs              → Cross-cutting libraries (auth, db, logging, tracing)
 /infra             → Infrastructure (Docker, Terraform, DB migrations)
 /docs              → Architecture decisions and operations guides
 /data              → Sample fixtures and payloads
+/scripts           → Development and smoke test scripts
 ```
 
 ### Module Organization Pattern
@@ -175,6 +249,8 @@ modules/{module-name}/
 1. **001_core_schema.sql**: Core tables (tenants, users, products, boms, components, suppliers, certificates, regulations, audit logs)
 2. **002_views_and_functions.sql**: Materialized views (`v_compliance_status`), helper functions
 3. **003_rls_policies.sql**: Row-level security policies for all tenant tables
+4. **004_document_lifecycle.sql**: Document lifecycle management and storage references
+5. **005_search_rag.sql**: pgvector extension, embeddings tables for semantic search
 
 ### Important Tables
 
@@ -287,26 +363,52 @@ else return "COMPLIANT"
 
 ## Environment Variables
 
-### API Server
+### Development Setup (.dev.env)
+
+See `.dev.env.example` for the complete template. Key required variables:
 
 ```bash
-PORT=4000                           # Server port
-DATABASE_URL=postgres://...         # Postgres connection
-AUTH_JWT_SECRET="dev-secret"        # HS256 key (dev only)
-AUTH_ISSUER=https://auth.dev.certivo
-AUTH_AUDIENCE=certivo-api
-AUTH_JWKS_URL=https://...          # JWKS endpoint (prod)
-AUTH_TENANT_CLAIM=tenant_id         # JWT claim for tenant
-AUTH_ROLES_CLAIM=roles              # JWT claim for roles
-AUTH_EMAIL_CLAIM=email              # JWT claim for email
-LOG_LEVEL=info                      # Pino level
+# Core Postgres + Auth
+DATABASE_URL="postgres://certivo:certivo@localhost:5432/certivo"
+AUTH_JWT_SECRET="dev-secret"
+AUTH_ISSUER="https://auth.dev.certivo"
+AUTH_AUDIENCE="certivo-api"
+AUTH_TENANT_CLAIM="tenant_id"
+AUTH_ROLES_CLAIM="roles"
+AUTH_EMAIL_CLAIM="email"
+
+# Temporal (Jobs & Workflow module)
+TEMPORAL_ADDRESS="localhost:7233"
+TEMPORAL_NAMESPACE="default"
+TEMPORAL_SUPPLIER_TASK_QUEUE="supplier-workflows"
+TEMPORAL_INGESTION_TASK_QUEUE="ingestion-retries"
+
+# Express API <-> CORA wiring
+CORA_API_URL="http://localhost:8082"
+CORA_API_KEY=""
+CORA_API_TIMEOUT_MS="10000"
+
+# Document storage (File/Document module)
+DOCUMENTS_LOCAL_ROOT="./.certivo/documents"
+DOCUMENTS_PUBLIC_BASE_URL="http://localhost:4000"
+DOCUMENTS_SIGNING_SECRET="dev-docs-secret"
+
+# CORA FastAPI sidecar
+CORA_DATABASE_URL="postgres://certivo:certivo@localhost:5432/certivo"
+CORA_OPENAI_API_KEY="sk-xxxx"                    # REQUIRED
+CORA_OPENAI_MODEL="gpt-4o-mini"
+
+# Web app / CLI auth
+CERTIVO_API_URL="http://localhost:4000"
+CERTIVO_API_TOKEN="<from generate-dev-token>"    # REQUIRED
 ```
 
-### Web App
+### Production Overrides
 
 ```bash
-CERTIVO_API_URL=http://localhost:4000
-CERTIVO_API_TOKEN=<jwt-token>
+AUTH_JWKS_URL=https://...          # JWKS endpoint (prod)
+LOG_LEVEL=info                      # Pino level
+PORT=4000                           # Server port
 ```
 
 ## Important Implementation Notes

@@ -95,8 +95,8 @@ export function ImpactScenarioWorkbench({
 
   return (
     <SectionCard
-      title="Impact Scenario Workbench"
-      description="Architecture §§4–5 limit vector lab: multi-substance overrides, diffing, and supplier/assembly rollups."
+      title="Impact Scenario Simulator"
+      description="Test regulation limit changes and analyze impact across suppliers and assemblies."
       actions={
         <div className="flex flex-wrap gap-3 text-xs text-slate-400">
           <span>Regulation: {regulationCode}</span>

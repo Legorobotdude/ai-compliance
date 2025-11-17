@@ -159,7 +159,8 @@ export class DashboardService {
       normalized.includes('supplier.email') ||
       normalized.includes('supplier_email') ||
       normalized.includes('llm') ||
-      normalized.includes('risk')
+      normalized.includes('risk') ||
+      normalized.includes('chat')
     ) {
       return 'LLM';
     }

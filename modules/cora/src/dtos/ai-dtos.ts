@@ -67,3 +67,38 @@ export interface AiRiskSummaryResponse {
   topGaps: AiSupplierGap[];
   stats: Record<string, number>;
 }
+
+export interface AiChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface AiChatContextChunk {
+  chunkId: UUID;
+  content: string;
+  sourceTitle: string;
+  sourceUrl?: string;
+  score?: number;
+}
+
+export interface AiChatRequest {
+  tenantId: TenantID;
+  conversationId?: UUID;
+  messages: AiChatMessage[];
+  contextChunks: AiChatContextChunk[];
+}
+
+export interface AiChatCitation {
+  chunkId: UUID;
+  quote: string;
+  sourceTitle?: string;
+  sourceUrl?: string;
+  relevance?: number;
+}
+
+export interface AiChatResponse {
+  conversationId: UUID;
+  messageId: UUID;
+  reply: string;
+  citations: AiChatCitation[];
+}

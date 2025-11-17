@@ -16,8 +16,8 @@ type IngestionOpsCenterProps = {
 export function IngestionOpsCenter({ issues }: IngestionOpsCenterProps) {
   return (
     <SectionCard
-      title="Ingestion Ops Center"
-      description="Live issue stream (Architecture §6) with retry/trigger affordances."
+      title="Data Ingestion Issues"
+      description="Active data quality issues requiring attention or automated resolution."
     >
       <div className="space-y-3">
         {issues.map((issue) => (

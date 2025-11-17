@@ -1,4 +1,7 @@
+import type { UUID } from '@certivo/lib-db';
 import type {
+  AiChatRequest,
+  AiChatResponse,
   AiDocumentFinding,
   AiDocumentPart,
   AiParseDocumentRequest,
@@ -49,6 +52,21 @@ interface SnakeRiskSummaryResponse {
     eta_days: number;
   }>;
   stats: Record<string, number>;
+}
+
+interface SnakeChatCitation {
+  chunk_id: string;
+  quote: string;
+  source_title?: string;
+  source_url?: string;
+  relevance?: number;
+}
+
+interface SnakeChatResponse {
+  conversation_id: string;
+  message_id: string;
+  answer: string;
+  citations: SnakeChatCitation[];
 }
 
 export class CoraService {
@@ -115,6 +133,39 @@ export class CoraService {
         etaDays: gap.eta_days
       })),
       stats: response.stats
+    };
+  }
+
+  async chat(payload: AiChatRequest): Promise<AiChatResponse> {
+    const response = await this.client.post<SnakeChatResponse>(
+      '/ai/chat',
+      {
+        conversation_id: payload.conversationId,
+        messages: payload.messages.map((message) => ({
+          role: message.role,
+          content: message.content
+        })),
+        context_chunks: payload.contextChunks.map((chunk) => ({
+          chunk_id: chunk.chunkId,
+          content: chunk.content,
+          source_title: chunk.sourceTitle,
+          source_url: chunk.sourceUrl,
+          score: chunk.score
+        }))
+      },
+      payload.tenantId
+    );
+    return {
+      conversationId: response.conversation_id as unknown as UUID,
+      messageId: response.message_id as unknown as UUID,
+      reply: response.answer,
+      citations: response.citations.map((citation) => ({
+        chunkId: citation.chunk_id as unknown as UUID,
+        quote: citation.quote,
+        sourceTitle: citation.source_title,
+        sourceUrl: citation.source_url,
+        relevance: citation.relevance
+      }))
     };
   }
 }

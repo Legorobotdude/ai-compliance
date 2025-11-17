@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { SectionCard } from '@/components/ui/section-card';
 import { DocumentsPageClient } from '@/components/documents/documents-page-client';
 
 export const dynamic = 'force-dynamic';
@@ -66,7 +65,7 @@ export default async function DocumentsPage() {
               <h3 className="text-lg font-semibold text-slate-100">Secure Upload</h3>
             </div>
             <p className="text-sm text-slate-400">
-              SHA256 hash verification and tenant-isolated storage ensure your documents are secure
+              Hash verification and tenant-isolated storage ensure your documents are secure
               and tamper-proof.
             </p>
           </div>
@@ -91,7 +90,7 @@ export default async function DocumentsPage() {
               <h3 className="text-lg font-semibold text-slate-100">Signed Downloads</h3>
             </div>
             <p className="text-sm text-slate-400">
-              Time-limited, HMAC-signed download URLs provide secure access without exposing
+              Time-limited, signed download URLs provide secure access without exposing
               permanent storage locations.
             </p>
           </div>
@@ -122,14 +121,13 @@ export default async function DocumentsPage() {
           </div>
         </div>
 
-        {/* Architecture Reference */}
+        {/* Features Overview */}
         <div className="mt-8 card p-6 border-l-4 border-brand-500">
           <h3 className="text-lg font-semibold text-slate-100 mb-2">
-            Architecture Implementation
+            Document Management Features
           </h3>
           <p className="text-sm text-slate-400 mb-4">
-            This page demonstrates the <strong>File/Document Module</strong> from the Architecture
-            specification (Architecture.md:15-17).
+            Comprehensive document handling with secure storage and lifecycle tracking.
           </p>
           <div className="space-y-2 text-sm text-slate-400">
             <div className="flex items-start gap-2">
@@ -145,7 +143,7 @@ export default async function DocumentsPage() {
                 />
               </svg>
               <span>
-                Handles uploads with pre-signed URLs or base64 content, enforces SHA256 verification
+                Upload documents via pre-signed URLs or base64 content with integrity verification
               </span>
             </div>
             <div className="flex items-start gap-2">
@@ -160,7 +158,7 @@ export default async function DocumentsPage() {
                   clipRule="evenodd"
                 />
               </svg>
-              <span>Manages document metadata with upload/scan status tracking</span>
+              <span>Track document metadata including upload status and scan results</span>
             </div>
             <div className="flex items-start gap-2">
               <svg
@@ -175,7 +173,7 @@ export default async function DocumentsPage() {
                 />
               </svg>
               <span>
-                Storage refs via LocalFileStorage adapter (S3/MinIO support ready via interface)
+                Flexible storage options with local filesystem or cloud storage (S3/MinIO)
               </span>
             </div>
             <div className="flex items-start gap-2">
@@ -191,7 +189,7 @@ export default async function DocumentsPage() {
                 />
               </svg>
               <span>
-                Provides document fetch APIs for CORA parsing and retention policy management
+                Integrated with CORA for automated document parsing and retention policies
               </span>
             </div>
           </div>

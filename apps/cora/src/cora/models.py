@@ -15,6 +15,7 @@ class LlmAgent(str, Enum):
     DOCUMENT_PARSE = "DOCUMENT_PARSE"
     SUPPLIER_EMAIL = "SUPPLIER_EMAIL"
     RISK_SUMMARY = "RISK_SUMMARY"
+    CHAT = "CHAT"
 
 
 class TenantContext(BaseModel):
@@ -147,6 +148,38 @@ class RiskSummaryResponse(BaseModel):
     exec_summary: str
     top_gaps: list[SupplierGap]
     stats: dict[str, float | int]
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class ChatContextChunk(BaseModel):
+    chunk_id: UUID
+    content: str
+    source_title: str
+    source_url: str | None = None
+    score: float | None = None
+
+
+class ChatCitation(BaseModel):
+    chunk_id: UUID
+    quote: str
+    relevance: float | None = None
+
+
+class ChatRequest(BaseModel):
+    conversation_id: UUID | None = None
+    messages: list[ChatMessage]
+    context_chunks: list[ChatContextChunk] = Field(default_factory=list)
+
+
+class ChatResponse(BaseModel):
+    conversation_id: UUID
+    message_id: UUID
+    answer: str
+    citations: list[ChatCitation]
 
 
 @dataclass(slots=True)

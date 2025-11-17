@@ -21,6 +21,7 @@
     "@certivo/lib-db": "workspace:*",
     "@certivo/lib-logging": "workspace:*",
     "@certivo/risk-impact": "workspace:*",
+    "@certivo/search-rag": "workspace:*",
     "@certivo/supplier": "workspace:*",
     "@types/express": "^5.0.5",
     "express": "^5.1.0",

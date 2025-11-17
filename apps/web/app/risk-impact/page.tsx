@@ -18,11 +18,10 @@ export default async function RiskImpactShowcasePage() {
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-10">
       <header className="flex flex-col gap-4 rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900/60 to-slate-900/20 p-8 text-white shadow-card lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-widest text-brand-300">Architecture §§4–6, Risk/Impact focus</p>
-          <h1 className="mt-2 text-3xl font-semibold">Risk & Impact Showcase</h1>
+          <p className="text-sm uppercase tracking-widest text-brand-300">Risk & Impact Analysis</p>
+          <h1 className="mt-2 text-3xl font-semibold">Risk & Impact Assessment</h1>
           <p className="mt-2 text-slate-300">
-            Purpose-built playground for the RiskImpactService: tweak PFAS limits, inspect supplier rollups, and verify
-            telemetry freshness without wading through unrelated dashboard widgets.
+            Simulate regulation changes, analyze supplier exposure, and monitor risk across your supply chain.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -68,25 +67,23 @@ export default async function RiskImpactShowcasePage() {
 function TestingPlaybookCard() {
   return (
     <SectionCard
-      title="How to exercise the module"
-      description="Pair this UI with CLI + API calls to validate Architecture §5 end-to-end."
+      title="Testing Guide"
+      description="Test impact scenarios and validate risk calculations."
     >
       <ol className="list-decimal space-y-3 pl-4 text-sm text-slate-300">
         <li>
-          Run <code className="rounded bg-slate-900 px-2 py-1 font-mono text-xs">pnpm risk:test</code> to populate
-          `impact_scenarios` and confirm multi-limit payloads stick.
+          Run <code className="rounded bg-slate-900 px-2 py-1 font-mono text-xs">pnpm risk:test</code> to create
+          impact scenarios with different regulation limits.
         </li>
         <li>
-          Use the Impact Scenario Workbench to send new vectors via `/api/impact` and confirm supplier/assembly rollups
-          reflect the change.
+          Use the Impact Scenario Workbench to send new limit vectors via <code className="rounded bg-slate-900 px-2 py-1 font-mono text-xs">/api/impact</code> endpoint
+          and verify supplier and assembly rollups update correctly.
         </li>
         <li>
-          Toggle weightings in the backend (RiskImpactService `DEFAULT_SCORE_WEIGHTS`) then reload this page to see the
-          Risk Visualization respond—captures the w1–w4 blending described in Architecture §5.
+          Adjust risk score weightings in RiskImpactService and reload to see changes reflected in the Risk Visualization.
         </li>
         <li>
-          Watch Risk Data Freshness to ensure ingestion jobs update `scenarioUpdatedAt` whenever you re-run the smoke
-          script or upload a new certificate.
+          Monitor Risk Data Freshness to ensure scenario timestamps update when certificates are uploaded or modified.
         </li>
       </ol>
     </SectionCard>

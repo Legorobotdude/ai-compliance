@@ -43,7 +43,7 @@ export function BomUploader({ onUploadComplete }: BomUploaderProps) {
     setLoading(true);
 
     try {
-      let payload: any;
+      let payload: Record<string, unknown>;
 
       if (mode === 'file' && file) {
         // Read file content

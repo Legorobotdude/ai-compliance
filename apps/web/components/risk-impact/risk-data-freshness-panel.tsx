@@ -16,8 +16,8 @@ export function RiskDataFreshnessPanel({ freshness }: { freshness: RiskDataFresh
 
   return (
     <SectionCard
-      title="Risk Data Freshness"
-      description="Timestamp audit per Architecture §5 so you know when each upstream feed last changed."
+      title="Data Freshness"
+      description="Last update timestamps for key data sources used in risk calculations."
     >
       <dl className="space-y-2 text-sm">
         {entries.map((entry) => (

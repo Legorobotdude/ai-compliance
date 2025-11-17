@@ -12,6 +12,7 @@ from .llm import LLMClient
 from .repositories import DocumentRepository, LlmLogRepository, RiskRepository, SupplierRepository
 from .routes import router as ai_router
 from .services import (
+    ChatAssistantService,
     DocumentParserService,
     RiskSummaryService,
     ServiceContainer,
@@ -43,7 +44,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings=settings
         ),
         supplier_email=SupplierEmailService(llm=llm_client, suppliers=suppliers, logger=logger, settings=settings),
-        risk_summary=RiskSummaryService(llm=llm_client, risks=risks, logger=logger)
+        risk_summary=RiskSummaryService(llm=llm_client, risks=risks, logger=logger),
+        chat=ChatAssistantService(llm=llm_client, logger=logger)
     )
 
     @asynccontextmanager

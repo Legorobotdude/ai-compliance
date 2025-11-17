@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends
 
 from .dependencies import get_service_container, get_tenant_context
 from .models import (
+    ChatRequest,
+    ChatResponse,
     DocumentParseRequest,
     DocumentParseResponse,
     RiskSummaryRequest,
@@ -44,3 +46,12 @@ async def risk_summary(
     services: ServiceContainer = Depends(get_service_container)
 ) -> RiskSummaryResponse:
     return await services.risk_summary.summarize(tenant.tenant_id, payload)
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat_completion(
+    payload: ChatRequest,
+    tenant: TenantContext = Depends(get_tenant_context),
+    services: ServiceContainer = Depends(get_service_container)
+) -> ChatResponse:
+    return await services.chat.respond(tenant.tenant_id, payload)

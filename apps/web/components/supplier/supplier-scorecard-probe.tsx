@@ -86,8 +86,8 @@ export function SupplierScorecardProbe({ suppliers }: SupplierScorecardProbeProp
 
   return (
     <SectionCard
-      title="Supplier scorecard probe"
-      description="Calls /supplier/scorecard to mirror the Architecture §5 smoke harness without leaving the dashboard."
+      title="Supplier Scorecard Tester"
+      description="Test the <code className='font-mono text-xs'>/supplier/scorecard</code> endpoint and verify supplier metrics."
       actions={
         <button
           type="button"
@@ -193,7 +193,7 @@ function BlockedPartsPanel({ parts }: { parts: SupplierBlockedPart[] }) {
     <div className="rounded-2xl border border-slate-900 bg-slate-950/40 p-4">
       <h3 className="text-sm font-semibold text-white">Blocked parts ({parts.length})</h3>
       <p className="mt-1 text-xs text-slate-500">
-        Mirrors the smoke test’s `/supplier/scorecard` payload—reason codes map to Architecture §5 workflow states.
+        Components requiring supplier action with reason codes indicating specific compliance issues.
       </p>
       <div className="mt-3 space-y-3">
         {parts.slice(0, 12).map((part) => (

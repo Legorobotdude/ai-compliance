@@ -49,7 +49,7 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
     setLoading(true);
 
     try {
-      let payload: any;
+      let payload: Record<string, unknown>;
 
       if (mode === 'file' && file) {
         // For file mode, we'll parse the content and structure it
@@ -60,11 +60,11 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
         if (lines.length === 0) {
           throw new Error('Empty file');
         }
-        const headers = lines[0]!.split(',').map(h => h.trim());
+        const headers = lines[0]!.split(',').map((h) => h.trim());
 
-        const certificates = lines.slice(1).map(line => {
-          const values = line.split(',').map(v => v.trim());
-          const row: any = {};
+        const certificates = lines.slice(1).map((line) => {
+          const values = line.split(',').map((v) => v.trim());
+          const row: Record<string, string | undefined> = {};
           headers.forEach((header, idx) => {
             row[header] = values[idx];
           });
@@ -79,7 +79,7 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
             findings: row.substance ? [{
               substanceName: row.substance || row.substance_name,
               concentrationValue: row.concentration ? parseFloat(row.concentration) : null,
-              concentrationUnit: row.unit as any,
+              concentrationUnit: row.unit ?? undefined,
             }] : [],
           };
         });

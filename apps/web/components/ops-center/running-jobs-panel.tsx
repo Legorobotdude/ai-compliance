@@ -23,8 +23,8 @@ const statusStyles: Record<WorkflowJob["status"], string> = {
 export function RunningJobsPanel({ jobs }: RunningJobsPanelProps) {
   return (
     <SectionCard
-      title="Workflow Heartbeat"
-      description="Architecture §7 Ops Center monitor for supplier cadences + ingestion retries."
+      title="Active Workflows"
+      description="Real-time monitoring of supplier request workflows and data ingestion retry jobs."
     >
       <div className="space-y-3">
         {jobs.map((job) => {

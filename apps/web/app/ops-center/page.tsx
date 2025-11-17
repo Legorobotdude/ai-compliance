@@ -16,12 +16,11 @@ export default async function OpsCenterPage() {
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-10">
       <header className="flex flex-col gap-4 rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900/70 to-slate-900/30 p-8 text-white shadow-card lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-widest text-brand-300">Architecture §6–§7 Ops Center</p>
+          <p className="text-sm uppercase tracking-widest text-brand-300">Operations Center</p>
           <h1 className="mt-2 text-3xl font-semibold">Operational Control Room</h1>
           <p className="mt-2 max-w-2xl text-slate-300">
-            Unified cockpit for audit trails, ingestion alerts, slow supplier responders, and live workflow heartbeats.
-            Mirrors the modular monolith service boundaries so compliance uploads, CORA traces, and Temporal jobs stay
-            observable in one place.
+            Monitor system operations including audit trails, data ingestion issues, supplier response times, and active workflow jobs
+            across all compliance modules.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -58,8 +57,8 @@ function LockedOpsCenter() {
   return (
     <div className="card border-dashed border-slate-800 text-sm text-slate-400">
       <p>
-        Ops Center is limited to Analyst/Admin roles. Switch roles via the top-right selector to inspect workflow
-        heartbeats and ingestion alerts.
+        Ops Center is limited to Analyst/Admin roles. Switch roles via the top-right selector to access
+        operational monitoring and alerts.
       </p>
     </div>
   );

@@ -10,7 +10,7 @@ import type { ScorecardRequest, SupplierRequestInput } from '@certivo/supplier';
 import { SupplierController } from '@certivo/supplier';
 import type { DownloadUrlRequest, FetchRequest, ListRequest, UploadRequest } from '@certivo/file-document';
 import { DocumentController } from '@certivo/file-document';
-import type { SearchQuery } from '@certivo/search-rag';
+import type { DocumentIngestRequest, SearchFilters, SearchQuery } from '@certivo/search-rag';
 import { SearchController } from '@certivo/search-rag';
 import type { DashboardSnapshotDto } from '@certivo/dashboard';
 import { DashboardController } from '@certivo/dashboard';
@@ -22,6 +22,14 @@ import type {
 import { CoraController } from '@certivo/cora';
 import type { UUID } from '@certivo/lib-db';
 import type { HttpRequest, HttpResponse } from '../types/http';
+
+interface AiChatHttpRequest {
+  tenantId: string;
+  conversationId?: string;
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  topK?: number;
+  filters?: SearchFilters;
+}
 
 export class ApiController {
   constructor(
@@ -112,6 +120,11 @@ export class ApiController {
     res.status(200).json(result);
   }
 
+  async postRagDocument(req: HttpRequest<DocumentIngestRequest>, res: HttpResponse) {
+    const result = await this.search.ingestDocument(req.body);
+    res.status(201).json(result);
+  }
+
   async getDashboardSnapshot(
     req: HttpRequest<unknown, Record<string, string>, { bomId?: string }>,
     res: HttpResponse
@@ -143,5 +156,38 @@ export class ApiController {
   async postAiRiskSummary(req: HttpRequest<AiRiskSummaryRequest>, res: HttpResponse) {
     const result = await this.cora.riskSummary(req.body);
     res.status(200).json(result);
+  }
+
+  async postAiChat(req: HttpRequest<AiChatHttpRequest>, res: HttpResponse) {
+    const lastUserMessage = [...req.body.messages].reverse().find((message) => message.role === 'user');
+    if (!lastUserMessage) {
+      throw new Error('At least one user message is required for chat completion');
+    }
+    const context = await this.search.buildPromptContext({
+      tenantId: req.tenantId,
+      query: lastUserMessage.content,
+      topK: req.body.topK,
+      filters: req.body.filters,
+      conversationId: req.body.conversationId as UUID | undefined
+    });
+    const chatResponse = await this.cora.chat({
+      tenantId: req.tenantId,
+      conversationId: req.body.conversationId as UUID | undefined,
+      messages: req.body.messages,
+      contextChunks: context.results.map((chunk) => ({
+        chunkId: chunk.id as UUID,
+        content: chunk.content,
+        sourceTitle: chunk.documentTitle,
+        sourceUrl: chunk.sourceUrl,
+        score: chunk.score
+      }))
+    });
+    res.status(200).json({
+      conversationId: chatResponse.conversationId,
+      messageId: chatResponse.messageId,
+      reply: chatResponse.reply,
+      citations: chatResponse.citations,
+      context
+    });
   }
 }
