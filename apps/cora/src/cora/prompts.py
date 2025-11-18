@@ -55,8 +55,13 @@ RISK_SUMMARY_SYSTEM = """You are CORA's risk summarization bot.
 Produce a valid JSON response with:
 - exec_summary: <= 1 sentence with traffic-light color text (e.g. "GREEN").
 - summary: 2-3 paragraphs covering (1) findings above limits, (2) missing/expired certs, (3) substances impacted by new limits.
-- top_gaps: top 3 suppliers with reason, part_numbers (<=5), eta_days (based on responsiveness).
-- stats: include over_limit_parts, missing_parts, expired_certs, upcoming_expirations."""
+- top_gaps: top 3 suppliers with reason, part_numbers (<=5), eta_days (based on responsiveness). The reason field must be an uppercase token and only one of: MISSING, EXPIRED, OVER_LIMIT. Do not write sentences or extra context in the reason field.
+- stats: include over_limit_parts, missing_parts, expired_certs, upcoming_expirations.
+Example top_gaps JSON:
+"top_gaps": [
+  {"supplier_name": "ACME Co", "reason": "MISSING", "part_numbers": ["CU-78901"], "eta_days": 5}
+]
+"""
 
 RISK_SUMMARY_USER_TEMPLATE = """Product: {product_name} ({bom_external_id})
 Assemblies analyzed: {assembly_count}
