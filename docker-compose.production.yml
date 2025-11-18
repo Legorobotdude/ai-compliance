@@ -46,12 +46,11 @@ services:
     container_name: certivo-temporal
     restart: unless-stopped
     environment:
-      - DB=postgresql
+      - DB=postgres12
       - DB_PORT=5432
       - POSTGRES_USER=certivo
       - POSTGRES_PWD=${POSTGRES_PASSWORD:-certivo}
       - POSTGRES_SEEDS=postgres
-      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
     ports:
       - '7233:7233'
     depends_on:

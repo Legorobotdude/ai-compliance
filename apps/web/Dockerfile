@@ -1,22 +1,22 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:20-bullseye-slim AS builder
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@10.12.4 --activate
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/web/package.json ./apps/web/
-COPY libs/*/package.json ./libs/*/
+# Copy workspace sources required for dependency installation
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json tsconfig.json ./
+COPY apps ./apps
+COPY modules ./modules
+COPY libs ./libs
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Copy source files
-COPY apps/web ./apps/web
-COPY libs ./libs
+# Copy remaining workspace files (docs, configs, etc.)
+COPY . .
 
 # Build workspace packages first
 RUN pnpm --filter @certivo/web^... build
@@ -25,26 +25,26 @@ RUN pnpm --filter @certivo/web^... build
 RUN pnpm --filter @certivo/web build
 
 # Production stage
-FROM node:20-alpine
+FROM node:20-bullseye-slim
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@10.12.4 --activate
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/web/package.json ./apps/web/
-COPY libs/*/package.json ./libs/*/
+# Copy workspace sources required for dependency installation
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json tsconfig.json ./
+COPY apps ./apps
+COPY modules ./modules
+COPY libs ./libs
 
 # Install production dependencies only
 RUN pnpm install --frozen-lockfile --prod
 
 # Copy built files from builder
 COPY --from=builder /app/apps/web/.next ./apps/web/.next
-COPY --from=builder /app/apps/web/public ./apps/web/public
 COPY --from=builder /app/apps/web/next.config.mjs ./apps/web/
-COPY --from=builder /app/libs/*/dist ./libs/
+COPY --from=builder /app/libs ./libs
 
 # Expose web port
 EXPOSE 3000

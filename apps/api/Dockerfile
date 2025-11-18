@@ -1,47 +1,49 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:20-bullseye-slim AS builder
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@10.12.4 --activate
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/api/package.json ./apps/api/
-COPY modules/*/package.json ./modules/*/
-COPY libs/*/package.json ./libs/*/
+# Copy workspace sources required for dependency installation
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json tsconfig.json ./
+COPY apps ./apps
+COPY modules ./modules
+COPY libs ./libs
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Copy source files
+# Copy remaining workspace files (docs, configs, sample data, etc.)
 COPY . .
 
 # Build all packages
 RUN pnpm build
 
 # Production stage
-FROM node:20-alpine
+FROM node:20-bullseye-slim
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@10.12.4 --activate
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/api/package.json ./apps/api/
-COPY modules/*/package.json ./modules/*/
-COPY libs/*/package.json ./libs/*/
+# Copy workspace sources required for dependency installation
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json tsconfig.json ./
+COPY apps ./apps
+COPY modules ./modules
+COPY libs ./libs
 
 # Install production dependencies only
 RUN pnpm install --frozen-lockfile --prod
 
 # Copy built files from builder
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
-COPY --from=builder /app/modules/*/dist ./modules/
-COPY --from=builder /app/libs/*/dist ./libs/
+COPY --from=builder /app/modules ./modules
+COPY --from=builder /app/libs ./libs
+COPY --from=builder /app/infra ./infra
+COPY --from=builder ["/app/Sample Data", "./Sample Data"]
 
 # Create documents directory
 RUN mkdir -p /app/.certivo/documents

@@ -150,6 +150,51 @@ This launches:
 
 If Postgres or Redis aren’t up yet, the script will boot `infra/docker/docker-compose.yml` for you. It also checks `TEMPORAL_ADDRESS` and runs `temporal server start-dev` automatically when pointed at `localhost` so the Jobs & Workflow module described in Architecture.md §1 is always available during development.
 
+### Docker-First Dev Runner
+
+If you prefer to run the entire Architecture.md §1 stack inside containers (API, web, worker, CORA, Temporal, Postgres, Redis), use the new helper:
+
+```bash
+./scripts/dev-docker.sh
+```
+
+This script loads `.dev.env`, provides the same default secrets as `pnpm dev`, and then runs `docker compose -f docker-compose.production.yml up -d --build`, giving you a production-like deployment without leaving your host environment running Node/Python processes.
+
+#### First-Time Setup (Docker)
+
+After starting the containers for the first time, initialize the database:
+
+```bash
+# 1. Run migrations to create database schema
+docker exec certivo-api node libs/db/scripts/run-migrations.mjs
+
+# 2. Seed sample data (optional, but recommended for testing)
+docker exec certivo-api node libs/db/scripts/seed-sample-data.mjs
+```
+
+The seed script creates:
+- ACME Manufacturing tenant
+- Industrial Smart Hub v2 BOM (A1234-BOM)
+- 3 suppliers (Zentech Components, Jinlong Precision, EverBright Materials)
+- 12 compliance certificates
+- Sample regulations (RoHS, REACH, PFAS)
+
+#### Managing Containers
+
+```bash
+# View logs (all services)
+docker compose -f docker-compose.production.yml logs -f
+
+# View logs (specific service)
+docker compose -f docker-compose.production.yml logs -f api
+
+# Stop all containers
+docker compose -f docker-compose.production.yml down
+
+# Rebuild and restart
+./scripts/dev-docker.sh
+```
+
 ### 6. Test the System
 
 Run the CLI smoke test to exercise the compliance + CORA flows:
