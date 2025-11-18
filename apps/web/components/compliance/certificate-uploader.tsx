@@ -30,6 +30,24 @@ type SupplierOption = {
   name: string;
 };
 
+type CertificateFindingPayload = {
+  substanceName: string;
+  concentrationValue?: number | null;
+  concentrationUnit?: '%' | 'ppm' | 'mg/kg' | null;
+  concentrationRaw?: string | null;
+};
+
+type CertificatePayload = {
+  supplierId: string;
+  partNumber: string;
+  type: CertType;
+  declarationDate: string | null;
+  validUntil: string | null;
+  thresholdPpm: number | null;
+  sourceDocumentId: string;
+  findings: CertificateFindingPayload[];
+};
+
 export function CertificateUploader({ onUploadComplete }: CertificateUploaderProps) {
   const [mode, setMode] = useState<UploadMode>('file');
   const [file, setFile] = useState<File | null>(null);
@@ -74,37 +92,14 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
       }
       if (mode === 'file' && file) {
         const [uploadedDocument, content] = await Promise.all([uploadDocument(file), file.text()]);
-        // For file mode, we'll parse the content and structure it
+        const extension = file.name.split('.').pop()?.toLowerCase();
 
-        // Simple CSV parsing for demo (assumes header row)
-        const lines = content.trim().split('\n');
-        if (lines.length === 0) {
-          throw new Error('Empty file');
+        let certificates: CertificatePayload[];
+        if (extension === 'xml') {
+          certificates = parseReachXml(content, supplierId, certType, uploadedDocument.id);
+        } else {
+          certificates = parseCertificateCsv(content, supplierId, certType, uploadedDocument.id);
         }
-        const headers = lines[0]!.split(',').map((h) => h.trim());
-
-        const certificates = lines.slice(1).map((line) => {
-          const values = line.split(',').map((v) => v.trim());
-          const row: Record<string, string | undefined> = {};
-          headers.forEach((header, idx) => {
-            row[header] = values[idx];
-          });
-
-          return {
-            supplierId,
-            partNumber: row.partNumber || row.part_number || '',
-            type: certType,
-            declarationDate: row.declarationDate || row.declaration_date || null,
-            validUntil: row.validUntil || row.valid_until || null,
-            thresholdPpm: row.thresholdPpm ? parseFloat(row.thresholdPpm) : null,
-            sourceDocumentId: uploadedDocument.id,
-            findings: row.substance ? [{
-              substanceName: row.substance || row.substance_name,
-              concentrationValue: row.concentration ? parseFloat(row.concentration) : null,
-              concentrationUnit: row.unit ?? undefined,
-            }] : [],
-          };
-        });
 
         payload = { certificates };
       } else if (mode === 'json' && jsonInput) {
@@ -361,4 +356,177 @@ async function safeJson(response: Response): Promise<unknown> {
   } catch {
     return undefined;
   }
+}
+
+function parseCertificateCsv(
+  content: string,
+  supplierId: string,
+  certType: CertType,
+  sourceDocumentId: string
+): CertificatePayload[] {
+  const lines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (lines.length === 0) {
+    throw new Error('CSV file is empty');
+  }
+
+  const headers = lines[0]!.split(',').map((h) => h.trim());
+  const normalizedHeaders = headers.reduce<Record<string, number>>((acc, header, index) => {
+    acc[normalizeHeader(header)] = index;
+    return acc;
+  }, {});
+
+  const certificates: CertificatePayload[] = [];
+  lines.slice(1).forEach((line, rowIndex) => {
+    const values = line.split(',').map((value) => value.trim());
+    if (values.every((value) => value === '')) {
+      return;
+    }
+
+    const partNumber = getValue(values, normalizedHeaders, ['partnumber', 'part_number', 'part']);
+    if (!partNumber) {
+      throw new Error(`Row ${rowIndex + 2} is missing a partNumber`);
+    }
+
+    const declarationDate = getValue(values, normalizedHeaders, ['declarationdate', 'declaration_date']) || null;
+    const validUntil = getValue(values, normalizedHeaders, ['validuntil', 'valid_until']) || null;
+    const thresholdRaw = getValue(values, normalizedHeaders, ['thresholdppm', 'threshold_ppm']);
+    const thresholdPpm = thresholdRaw && !Number.isNaN(Number.parseFloat(thresholdRaw))
+      ? Number.parseFloat(thresholdRaw)
+      : null;
+
+    const substance =
+      getValue(values, normalizedHeaders, ['substance', 'substancename']) ??
+      getValue(values, normalizedHeaders, ['chemical']);
+    const concentrationRaw = getValue(values, normalizedHeaders, ['concentration', 'value']);
+    const concentrationUnit = (getValue(values, normalizedHeaders, ['unit', 'units']) as CertificateFindingPayload['concentrationUnit']) ?? undefined;
+
+    const findings: CertificateFindingPayload[] =
+      substance
+        ? [
+            {
+              substanceName: substance,
+              concentrationValue:
+                concentrationRaw && !Number.isNaN(Number.parseFloat(concentrationRaw))
+                  ? Number.parseFloat(concentrationRaw)
+                  : null,
+              concentrationUnit,
+              concentrationRaw: concentrationRaw ?? null
+            }
+          ]
+        : [];
+
+    certificates.push({
+      supplierId,
+      partNumber,
+      type: certType,
+      declarationDate,
+      validUntil,
+      thresholdPpm,
+      sourceDocumentId,
+      findings
+    });
+  });
+
+  if (certificates.length === 0) {
+    throw new Error('No certificate rows were found in the CSV file');
+  }
+
+  return certificates;
+}
+
+function parseReachXml(
+  content: string,
+  supplierId: string,
+  certType: CertType,
+  sourceDocumentId: string
+): CertificatePayload[] {
+  const parser = new DOMParser();
+  const xmlDoc = parser.parseFromString(content, 'application/xml');
+  const parserError = xmlDoc.querySelector('parsererror');
+  if (parserError) {
+    throw new Error('Invalid XML file');
+  }
+
+  const parts = Array.from(xmlDoc.getElementsByTagName('Part'));
+  if (parts.length === 0) {
+    throw new Error('XML does not include any <Part> elements');
+  }
+
+  const certificates = parts.map((part, index) => {
+    const partNumber = part.getElementsByTagName('PartNumber')[0]?.textContent?.trim();
+    if (!partNumber) {
+      throw new Error(`Part entry #${index + 1} is missing a <PartNumber>`);
+    }
+
+    const declarationDate = part.getElementsByTagName('DeclarationDate')[0]?.textContent?.trim() || null;
+    const validUntil = part.getElementsByTagName('ValidUntil')[0]?.textContent?.trim() || null;
+    const substances = Array.from(part.getElementsByTagName('Substance'));
+
+    const findings: CertificateFindingPayload[] = [];
+    substances.forEach((substance) => {
+      const name =
+        substance.getAttribute('name')?.trim() ||
+        substance.getElementsByTagName('Name')[0]?.textContent?.trim();
+      if (!name) {
+        return;
+      }
+
+      const concentrationRaw =
+        substance.getAttribute('concentration')?.trim() ||
+        substance.getAttribute('value')?.trim() ||
+        substance.textContent?.trim() ||
+        null;
+      const concentrationValue =
+        concentrationRaw && !Number.isNaN(Number.parseFloat(concentrationRaw))
+          ? Number.parseFloat(concentrationRaw)
+          : null;
+
+      const unit =
+        (substance.getAttribute('unit') ||
+          substance.getElementsByTagName('Unit')[0]?.textContent ||
+          null) as CertificateFindingPayload['concentrationUnit'];
+
+      findings.push({
+        substanceName: name,
+        concentrationUnit: unit,
+        concentrationValue,
+        concentrationRaw
+      });
+    });
+
+    return {
+      supplierId,
+      partNumber,
+      type: certType,
+      declarationDate,
+      validUntil,
+      thresholdPpm: null,
+      sourceDocumentId,
+      findings
+    };
+  });
+
+  return certificates;
+}
+
+function normalizeHeader(header: string): string {
+  return header.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+}
+
+function getValue(
+  row: string[],
+  headerMap: Record<string, number>,
+  keys: string[]
+): string | undefined {
+  for (const key of keys) {
+    const index = headerMap[key];
+    if (index !== undefined) {
+      return row[index]?.trim();
+    }
+  }
+  return undefined;
 }
