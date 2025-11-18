@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { uploadDocument } from '@/lib/api/documents';
+import type { DashboardSnapshot } from '@/lib/types/dashboard';
 
 interface CertificateUploaderProps {
   onUploadComplete?: () => void;
@@ -29,6 +30,17 @@ type SupplierOption = {
   id: string;
   name: string;
 };
+
+type SupplierScope = 'single' | 'auto';
+
+type SupplierAssignment = {
+  supplierId: string;
+  supplierName?: string | null;
+};
+
+type SupplierResolution =
+  | { mode: 'single'; supplierId: string }
+  | { mode: 'auto'; lookup: (partNumber: string) => string | undefined };
 
 type CoraParsedFinding = {
   substanceName: string;
@@ -66,15 +78,25 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
   const [file, setFile] = useState<File | null>(null);
   const [jsonInput, setJsonInput] = useState('');
   const [certType, setCertType] = useState<CertType>('ROHS');
+  const [supplierScope, setSupplierScope] = useState<SupplierScope>('single');
   const [supplierId, setSupplierId] = useState('');
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [supplierError, setSupplierError] = useState<string | null>(null);
+  const [partSupplierAssignments, setPartSupplierAssignments] = useState<Map<string, SupplierAssignment>>(
+    () => new Map()
+  );
+  const [partSupplierLoading, setPartSupplierLoading] = useState(false);
+  const [partSupplierError, setPartSupplierError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CertificateUploadResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchSuppliers();
+  }, []);
+
+  useEffect(() => {
+    void fetchPartSupplierAssignments();
   }, []);
 
   useEffect(() => {
@@ -100,12 +122,22 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
     try {
       let payload: Record<string, unknown>;
 
-      if (mode === 'file' && !supplierId) {
-        throw new Error('Select a supplier before uploading certificates');
-      }
       if (mode === 'file' && file) {
         const uploadedDocument = await uploadDocument(file);
         const extension = file.name.split('.').pop()?.toLowerCase();
+        const isCsv = extension === 'csv';
+        if (supplierScope === 'auto' && !isCsv) {
+          throw new Error('Auto supplier detection is only available for CSV uploads');
+        }
+        const requiresSupplierSelection = supplierScope === 'single' || !isCsv;
+        if (requiresSupplierSelection && !supplierId) {
+          throw new Error('Select a supplier before uploading certificates');
+        }
+        if (supplierScope === 'auto' && partSupplierAssignments.size === 0) {
+          throw new Error(
+            'Auto supplier detection requires component_suppliers assignments. Map BOM parts to suppliers first.'
+          );
+        }
 
         let certificates: CertificatePayload[];
         if (extension === 'xml') {
@@ -113,7 +145,14 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
           certificates = parseReachXml(content, supplierId, certType, uploadedDocument.id);
         } else if (extension === 'csv') {
           const content = await file.text();
-          certificates = parseCertificateCsv(content, supplierId, certType, uploadedDocument.id);
+          const supplierResolution: SupplierResolution =
+            supplierScope === 'auto'
+              ? {
+                  mode: 'auto',
+                  lookup: (partNumber: string) => partSupplierAssignments.get(partNumber)?.supplierId
+                }
+              : { mode: 'single', supplierId };
+          certificates = parseCertificateCsv(content, supplierResolution, certType, uploadedDocument.id);
         } else if (extension === 'pdf') {
           certificates = await parseCertificatePdf(uploadedDocument.id, supplierId, certType);
         } else {
@@ -160,6 +199,33 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
       setSupplierError(payload.suppliers.length ? null : 'No suppliers found. Create one on the compliance page.');
     } catch (error) {
       setSupplierError(error instanceof Error ? error.message : 'Unable to load suppliers');
+    }
+  };
+
+  const fetchPartSupplierAssignments = async () => {
+    setPartSupplierLoading(true);
+    setPartSupplierError(null);
+    try {
+      const response = await fetch('/api/dashboard/snapshot');
+      if (!response.ok) {
+        const body = (await safeJson(response)) as { error?: string } | undefined;
+        throw new Error(body?.error ?? `Failed to load BOM snapshot (${response.status})`);
+      }
+      const payload = (await response.json()) as DashboardSnapshot;
+      const assignmentMap = new Map<string, SupplierAssignment>();
+      payload.bom.items.forEach((item) => {
+        if (item.partNumber && item.supplierId) {
+          assignmentMap.set(item.partNumber, {
+            supplierId: item.supplierId,
+            supplierName: item.supplierName ?? null
+          });
+        }
+      });
+      setPartSupplierAssignments(assignmentMap);
+    } catch (err) {
+      setPartSupplierError(err instanceof Error ? err.message : 'Unable to load part owners');
+    } finally {
+      setPartSupplierLoading(false);
     }
   };
 
@@ -226,8 +292,57 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
           </select>
         </div>
 
-        {/* Supplier selector */}
+        {/* Supplier scope */}
         {mode === 'file' && (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-slate-300">Supplier scope *</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSupplierScope('single')}
+                className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                  supplierScope === 'single'
+                    ? 'border-brand-400 bg-brand-500/20 text-white'
+                    : 'border-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Single supplier
+              </button>
+              <button
+                type="button"
+                onClick={() => setSupplierScope('auto')}
+                className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                  supplierScope === 'auto'
+                    ? 'border-brand-400 bg-brand-500/20 text-white'
+                    : 'border-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Auto (per part)
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Auto detection reads Architecture.md §6 <code className="font-mono">component_suppliers</code> ownership
+              from the latest BOM (via the dashboard snapshot). CSV uploads can then include multiple suppliers in a
+              single file. XML/PDF uploads still require selecting a supplier.
+            </p>
+            {supplierScope === 'auto' && (
+              <p className="text-xs text-slate-400">
+                {partSupplierLoading
+                  ? 'Loading BOM ownership...'
+                  : partSupplierError
+                    ? `Auto-detect unavailable: ${partSupplierError}`
+                    : partSupplierAssignments.size > 0
+                      ? `Loaded suppliers for ${partSupplierAssignments.size} part${
+                          partSupplierAssignments.size === 1 ? '' : 's'
+                        }. Unassigned parts must be mapped before upload.`
+                      : 'No assigned parts detected. Map BOM parts to suppliers in the Supplier Management panel first.'}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Supplier selector */}
+        {mode === 'file' && supplierScope === 'single' && (
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
               Supplier *
@@ -379,7 +494,7 @@ async function safeJson(response: Response): Promise<unknown> {
 
 function parseCertificateCsv(
   content: string,
-  supplierId: string,
+  supplierResolution: SupplierResolution,
   certType: CertType,
   sourceDocumentId: string
 ): CertificatePayload[] {
@@ -399,6 +514,7 @@ function parseCertificateCsv(
   }, {});
 
   const certificates: CertificatePayload[] = [];
+  const missingSupplierParts: string[] = [];
   lines.slice(1).forEach((line, rowIndex) => {
     const values = line.split(',').map((value) => value.trim());
     if (values.every((value) => value === '')) {
@@ -439,8 +555,20 @@ function parseCertificateCsv(
           ]
         : [];
 
+    const resolvedSupplierId =
+      supplierResolution.mode === 'single'
+        ? supplierResolution.supplierId
+        : supplierResolution.lookup(partNumber);
+
+    if (!resolvedSupplierId) {
+      if (!missingSupplierParts.includes(partNumber)) {
+        missingSupplierParts.push(partNumber);
+      }
+      return;
+    }
+
     certificates.push({
-      supplierId,
+      supplierId: resolvedSupplierId,
       partNumber,
       type: certType,
       declarationDate,
@@ -450,6 +578,18 @@ function parseCertificateCsv(
       findings
     });
   });
+
+  if (missingSupplierParts.length > 0) {
+    const [head, ...rest] = missingSupplierParts;
+    const preview = rest.length ? `${head}, ${rest.slice(0, 2).join(', ')}` : head;
+    const remaining = rest.length - 2;
+    const suffix = remaining > 0 ? ` (+${remaining} more)` : '';
+    throw new Error(
+      `Auto supplier detection could not find component_suppliers ownership for part${
+        missingSupplierParts.length > 1 ? 's' : ''
+      } ${preview}${suffix}. Map these parts in Supplier Management or include a supplierId column in the CSV.`
+    );
+  }
 
   if (certificates.length === 0) {
     throw new Error('No certificate rows were found in the CSV file');
