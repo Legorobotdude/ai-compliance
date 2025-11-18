@@ -161,10 +161,17 @@ export function BomExplorer({ rows, suppliers, bomId }: BomExplorerProps) {
           const rowKey = buildRowKey(row);
           const supplier = row.supplierId ? supplierMap.get(row.supplierId) : undefined;
           const rowState = rowStates[rowKey] ?? EMPTY_ROW_STATE;
-          const canDraft = row.status === "EXPIRED" && Boolean(supplier);
+          const hasSupplier = Boolean(row.supplierId);
+          const needsOutreach =
+            row.status === "EXPIRED" || row.status === "OVER_LIMIT" || row.status === "MISSING";
+          const canDraft = needsOutreach && hasSupplier;
           const helper =
             rowState.draftStatus === "error"
               ? rowState.draftError ?? "Draft failed"
+              : !hasSupplier
+              ? "Assign supplier to trigger outreach"
+              : !needsOutreach
+              ? "Supplier assigned · outreach opens when expired/over limit/missing"
               : canDraft
               ? rowState.draft
                 ? `Draft ready · Locale ${rowState.draft.language.toUpperCase()}`

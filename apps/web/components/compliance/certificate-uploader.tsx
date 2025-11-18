@@ -527,7 +527,17 @@ function parseCertificateCsv(
     }
 
     const declarationDate = getValue(values, normalizedHeaders, ['declarationdate', 'declaration_date']) || null;
-    const validUntil = getValue(values, normalizedHeaders, ['validuntil', 'valid_until']) || null;
+    const validUntil =
+      getValue(values, normalizedHeaders, [
+        'validuntil',
+        'valid_until',
+        'certexpiry',
+        'cert_expiry',
+        'expiry',
+        'expirydate',
+        'expiration',
+        'expirationdate'
+      ]) || null;
     const thresholdRaw = getValue(values, normalizedHeaders, ['thresholdppm', 'threshold_ppm']);
     const thresholdPpm = thresholdRaw && !Number.isNaN(Number.parseFloat(thresholdRaw))
       ? Number.parseFloat(thresholdRaw)
