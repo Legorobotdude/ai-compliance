@@ -1,27 +1,113 @@
-# Certivo Platform Scaffold
+# AI Compliance Platform
 
-Initial repo layout aligned with the modular monolith architecture in `Architecture.md`.
+An AI-powered compliance platform that helps manufacturers manage regulatory compliance for their products. The platform ingests Bills of Materials (BOMs) and compliance certificates, uses AI (CORA) to parse documents, tracks supplier relationships, and provides risk analysis and impact simulations for regulatory changes.
 
-## Top-level structure
+## What is this platform?
 
-- `apps/` — deployable applications (API, Web, Worker, CORA sidecar).
-- `modules/` — domain modules shared inside the monolith (Gateway, Compliance, Supplier, Risk/Impact, etc.).
-- `libs/` — cross-cutting libraries (auth, config, logging, tracing, tests).
-- `infra/` — Docker + Terraform infrastructure definitions.
-- `docs/` — ADRs, ops runbooks, and supporting documentation.
-- `data/` — sanitized fixtures/sample payloads.
-- `Architecture.md` — canonical system design reference.
+This platform automates the complex process of ensuring product compliance with regulations like RoHS, REACH, and PFAS. The platform:
 
-## Quick start
+- **Ingests BOMs** (CSV/JSON) and **certificates** (XML/CSV/PDF) with hierarchical assembly support
+- **Uses AI (CORA)** to parse unstructured documents and extract substance concentrations
+- **Tracks compliance status** per component (COMPLIANT, MISSING, EXPIRED, OVER_LIMIT)
+- **Manages supplier relationships** with scorecards, SLA tracking, and automated outreach
+- **Simulates regulatory impact** (e.g., "What if PFAS limits drop by 90%?")
+- **Provides risk visualization** and dashboards for compliance teams
 
-### 1. Start infrastructure
+## Architecture Overview
+
+This platform is built as a **modular monolith**—a single deployable application with clear domain boundaries. This approach provides:
+
+- **Transactional consistency** across modules
+- **Simpler local development** (one codebase, shared database)
+- **Future flexibility** to extract modules into microservices if needed
+
+### Core Modules
+
+- **Gateway/API** (Express + TypeScript): JWT auth, rate limiting, tenant scoping, request routing
+- **Compliance Service**: BOM/certificate ingestion, normalization, status engine, merge logic
+- **CORA AI Module** (Python FastAPI): LLM-powered document parsing, supplier email generation, risk summarization
+- **Risk/Impact Module**: Regulation catalogs, limit management, impact simulations, risk scoring
+- **Supplier Module**: Supplier management, scorecards, SLA tracking, request workflows
+- **File/Document Module**: Upload handling, storage (S3/MinIO), document metadata
+- **Jobs & Workflow Module** (Temporal): Async workflows for ingestion retries, supplier reminders, LLM reprocessing
+- **Search/RAG Module**: Semantic search over regulations using pgvector embeddings
+
+### Tech Stack
+
+**Backend:**
+- Node.js + TypeScript (ES2022, strict mode)
+- Express (API gateway)
+- PostgreSQL + pgvector (data + embeddings)
+- Redis (queues, cache)
+- Temporal (workflows)
+- Python FastAPI (CORA AI sidecar)
+
+**Frontend:**
+- Next.js 14+ (App Router)
+- React + TypeScript
+- Tailwind CSS
+- TanStack Table (virtualized grids)
+- Recharts (visualizations)
+
+**Infrastructure:**
+- Docker Compose (local dev)
+- Terraform (optional production)
+- S3/MinIO (object storage)
+
+**Multi-tenancy:**
+- Shared database with Row-Level Security (RLS)
+- JWT-based tenant scoping
+- AsyncLocalStorage for tenant context propagation
+
+## Repository Structure
+
+```
+├── apps/              # Deployable applications
+│   ├── api/          # Express API gateway
+│   ├── web/          # Next.js dashboard
+│   ├── worker/       # Temporal workers
+│   └── cora/         # Python FastAPI AI sidecar
+├── modules/          # Domain modules (shared in monolith)
+│   ├── compliance/   # BOM/certificate ingestion & status
+│   ├── cora/         # AI integration adapters
+│   ├── risk-impact/  # Risk scoring & impact simulation
+│   ├── supplier/     # Supplier management & workflows
+│   ├── file-document/ # Document upload & storage
+│   ├── jobs-workflows/ # Temporal workflow definitions
+│   └── search-rag/   # Semantic search & embeddings
+├── libs/             # Cross-cutting libraries
+│   ├── auth/         # JWT validation, tenant context
+│   ├── db/           # Postgres client, schema, migrations
+│   ├── config/       # Environment configuration
+│   ├── logging/      # Structured logging
+│   ├── tracing/      # OpenTelemetry instrumentation
+│   └── test-utils/   # Test helpers & fixtures
+├── infra/            # Infrastructure definitions
+│   ├── docker/       # Docker Compose setup
+│   ├── db/           # Database migrations
+│   └── terraform/    # Production infrastructure (optional)
+└── docs/             # ADRs, ops runbooks
+```
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 20+ and pnpm
+- Python 3.11+ and uv (for CORA)
+- Docker and Docker Compose
+- PostgreSQL 15+ (or use Docker)
+
+### 1. Start Infrastructure
 
 ```bash
 cd infra/docker
 docker compose up -d
 ```
 
-### 2. Set up the database
+This starts PostgreSQL, Redis, MinIO (S3-compatible storage), and Temporal.
+
+### 2. Set Up the Database
 
 ```bash
 # From repo root
@@ -29,60 +115,177 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
-### 3. Generate a JWT token for the web app
+### 3. Generate a JWT Token for Development
 
 ```bash
 node infra/docker/generate-dev-token.mjs
 ```
 
-Copy the generated token.
+Copy the generated token—you'll need it for the `.dev.env` file.
 
-### 4. Create a `.dev.env`
-
-Use the sample template to capture all required URLs/tokens:
+### 4. Create `.dev.env`
 
 ```bash
 cp .dev.env.example .dev.env
 ```
 
-Then edit `.dev.env` and fill in:
+Edit `.dev.env` and fill in:
 
 - `CERTIVO_API_TOKEN` — token from step 3
-- `CORA_OPENAI_API_KEY` — your OpenAI key
-- (Optional) override any API/CORA URLs or database settings
+- `CORA_OPENAI_API_KEY` — your OpenAI API key
+- (Optional) Override API/CORA URLs or database settings
 
-### 5. Start all services (API, web, CORA)
+### 5. Start All Services
 
 ```bash
 pnpm dev
 ```
 
-The script loads `.dev.env`, exports the required URLs/secrets, then launches:
+This launches:
+- Express API (`@certivo/api`) on port 4000
+- Next.js dashboard (`@certivo/web`) on port 3000
+- CORA FastAPI sidecar (`apps/cora`) on port 8000
 
-- Express API (`@certivo/api`)
-- Next.js dashboard (`@certivo/web`)
-- CORA FastAPI sidecar (`apps/cora`)
+### 6. Test the System
 
-For detailed setup instructions, see:
-- `apps/api/README.md` - API server configuration
-- `apps/web/README.md` - Web app configuration
-- `infra/docker/README.md` - Docker setup and JWT token generation
-
-### Optional: run the CLI lab smoke test
-
-Exercise the same compliance + CORA flows that power the `/lab` page (Architecture.md §§3–4) straight from the terminal:
+Run the CLI smoke test to exercise the compliance + CORA flows:
 
 ```bash
 export CERTIVO_API_URL="http://localhost:4000"
-export CERTIVO_API_TOKEN="<token-from-step-4>"
+export CERTIVO_API_TOKEN="<token-from-step-3>"
 
 pnpm lab:test
 ```
 
-This script uploads the sample BOM, ingests certificates, and hits `/ai/parse-document`, `/ai/supplier-email`, and `/ai/risk-summary` through the Express gateway so you can validate the end-to-end path without opening the UI.
+This script uploads sample BOMs, ingests certificates, and exercises the AI endpoints (`/ai/parse-document`, `/ai/supplier-email`, `/ai/risk-summary`).
 
-## Next steps
+## Development Workflow
 
-1. Scaffold package managers/workspaces (pnpm + uv) and baseline tsconfig/eslint settings.
-2. Flesh out module entrypoints (controllers, services, repositories) referencing the shared database schema.
-3. Wire Docker Compose for local dev (api, web, worker, cora, postgres, redis, minio, temporal).
+### Build & Lint
+
+```bash
+pnpm build    # TypeScript compilation across all workspaces
+pnpm lint     # ESLint checks (run `pnpm lint --fix` to auto-fix)
+```
+
+### Running Individual Services
+
+```bash
+pnpm --filter @certivo/api dev    # API only
+pnpm --filter @certivo/web dev    # Web app only
+```
+
+### Database Migrations
+
+```bash
+pnpm db:migrate    # Run pending migrations
+pnpm db:seed       # Seed sample data
+```
+
+Migrations live in `infra/db/migrations/`. The schema is defined in `libs/db/src/schema.ts`.
+
+### Testing
+
+```bash
+pnpm test    # Run tests (per-package test runners)
+```
+
+Tests should live under each package's `src/__tests__/` directory. Use fixtures from `libs/test-utils`.
+
+## Key Concepts
+
+### Compliance Status Engine
+
+Each component gets a status based on:
+
+```
+if no certificate: MISSING
+else if now() > valid_until: EXPIRED
+else if any finding.concentration_ppm > regulation_limit_ppm(substance): OVER_LIMIT
+else: COMPLIANT
+```
+
+### Unit Normalization
+
+Concentrations are normalized to ppm:
+- `% → ppm = % * 10,000`
+- `mg/kg → ppm = mg/kg` (1:1)
+- Missing units → `concentration_ppm = null` with `data_quality` flag
+
+### Multi-Tenancy
+
+Every table includes `tenant_id`. Row-Level Security (RLS) policies enforce tenant isolation. JWT tokens must include `tenant_id` and `roles` claims, which propagate via AsyncLocalStorage to the database context.
+
+### CORA AI
+
+CORA (Compliance Operations & Risk Analysis) handles:
+1. **Document Parsing**: PDF/SDS/CoC → structured JSON with substance findings
+2. **Supplier Email Generation**: Localized, professional outreach emails
+3. **Risk Summarization**: Executive summaries with top supplier gaps
+
+All LLM calls are logged to `llm_calls` with prompt hashes (not raw content) for auditability.
+
+## API Overview
+
+Key endpoints:
+
+- `POST /bom/upload` — Upload BOM (CSV/JSON)
+- `POST /certs/upload` — Upload certificates (XML/CSV/PDF)
+- `GET /merged?bom_id=...` — Get BOM with compliance status
+- `GET /supplier/scorecard?supplier_id=...` — Supplier performance metrics
+- `POST /impact/predict` — Simulate regulatory threshold changes
+- `POST /ai/parse-document` — CORA: Parse unstructured document
+- `POST /ai/supplier-email` — CORA: Generate supplier outreach email
+- `POST /ai/risk-summary` — CORA: Generate risk summary
+
+See `Architecture.md` §3 for detailed API contracts.
+
+## Sample Data
+
+Test with the "Industrial Smart Hub v2" BOM:
+- Control Unit (CU-78901) with Lead finding
+- Wireless Module (WM-88211) with Nickel Sulfate finding
+- Battery Pack (BP-44001) with PFOA finding
+
+Sample certificates are in `data/samples/`:
+- `sample-bom.csv`
+- `sample-certificates.csv`
+
+## Documentation
+
+- **[Architecture.md](./Architecture.md)** — Comprehensive system design, data model, API contracts, and implementation details
+- **[docs/adr/](./docs/adr/)** — Architecture Decision Records
+- **[docs/ops/](./docs/ops/)** — Operations runbooks
+- **[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)** — Deployment guide
+
+## Contributing
+
+### Code Style
+
+- TypeScript strict mode, ES2022 target
+- ESLint with `typescript-eslint` recommended rules
+- Underscore-prefixed unused variables allowed (`_req`)
+- Descriptive async method names (`verbNounAsync` optional)
+
+### Commit Messages
+
+Follow conventional commits:
+- `feat: add supplier module DTOs`
+- `fix: correct unit normalization in certificate parser`
+- `chore: update pnpm tooling`
+
+### Pull Requests
+
+PRs should:
+- Describe the change and reference `Architecture.md` sections when relevant
+- Include testing notes (commands + outcomes)
+- Note any schema migrations or new environment variables
+- Add screenshots for UI updates
+
+## License
+
+[Add your license here]
+
+---
+
+**Need help?** Check `Architecture.md` for detailed design decisions, or open an issue.
