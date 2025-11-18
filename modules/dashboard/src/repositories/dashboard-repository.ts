@@ -258,6 +258,7 @@ export class DashboardRepository {
          and bc.bom_id = ii.bom_id
          and bc.part_number = ii.part_number
         where ii.tenant_id = $1
+          and ii.status <> 'RESOLVED'
         order by ii.created_at desc
         limit $2
       `,

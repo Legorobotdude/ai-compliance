@@ -173,6 +173,26 @@ export class SupplierRepository {
     });
   }
 
+  async resolveSupplierIngestionIssues(tenantId: TenantID, partNumbers: string[]): Promise<number> {
+    if (!partNumbers.length) {
+      return 0;
+    }
+    const rows = await this.db.query<{ cleared: true }>({
+      text: `
+        update ingestion_issues ii
+           set status = 'RESOLVED',
+               updated_at = now()
+         where ii.tenant_id = $1
+           and ii.code = 'SUPPLIER_MISSING'
+           and ii.status <> 'RESOLVED'
+           and ii.part_number = any($2::text[])
+        returning true as cleared
+      `,
+      values: [tenantId, partNumbers]
+    });
+    return rows.length;
+  }
+
   async listUnassignedParts(
     tenantId: TenantID,
     bomId: UUID,

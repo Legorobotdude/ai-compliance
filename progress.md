@@ -11,6 +11,7 @@
 - Built out module layers (controllers/services/repositories/DTOs) for Compliance, Supplier, Risk/Impact, File/Document, Jobs & Workflows, Search/RAG, and Gateway, all referencing the shared schema.
 - Added `ApiModuleFactory` to wire modules together, and worker bootstrap helpers for Temporal orchestration.
 - Finished the SupplierService workflow hooks per Architecture.md §5 by replacing the placeholder scheduler with the Temporal-backed workflow service so `/supplier/request` reliably enqueues Temporal supplier workflows and surfaces missing wiring via structured warnings.
+- Ensured supplier assignments clear SUPPLIER_MISSING ingestion issues (Architecture.md §§3 & 6) by resolving matching `ingestion_issues` rows whenever SupplierService maps parts, so the Compliance dashboards drop cleared alerts as soon as a component gets a supplier.
 
 ## Database & local infra
 - Authored SQL migrations (`infra/db/migrations/*.sql`) to create the Architecture.md §2 data model, helper triggers, the `create_bom` procedure, materialized-style compliance views, and the regulation search function expected by the repositories.
@@ -129,3 +130,4 @@
 - Wired PDF uploads to CORA parsing (Architecture.md §4): when analysts submit RoHS/REACH evidence like `Sample Data/cert_rohs.pdf`, the uploader now calls `/api/ai/parse-document`, maps the returned parts/findings into certificate payloads, and passes those directly to `/certs/upload` so unsupported formats trigger CORA ingestion instead of CSV parsing errors.
 - Added multi-supplier CSV support to the certificate uploader (Architecture.md §6): it now loads the dashboard snapshot’s `component_suppliers` ownership map, auto-resolves supplier IDs per part, and surfaces actionable errors for unmapped parts, enabling uploads of mixed files like `Sample Data/cert_rohs.csv` without pre-splitting by supplier.
 - Relaxed the certificate CSV parser to recognize `cert_expiry`/`expiry_date` style headers from Architecture.md sample datasets so expired certificates render as `EXPIRED` in the merged view instead of defaulting to null `validUntil`.
+- Extended XML and PDF certificate ingestion to reuse component_suppliers auto-mapping, letting a single evidence file update multiple suppliers as long as BOM ownership is seeded per Architecture.md §6.

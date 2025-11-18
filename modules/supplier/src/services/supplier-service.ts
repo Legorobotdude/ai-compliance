@@ -260,6 +260,9 @@ export class SupplierService {
       : [];
     const created = upsertResults.filter((row) => row.inserted).length;
     const updated = upsertResults.length - created;
+    const resolvedIssues = assignable.length
+      ? await this.repository.resolveSupplierIngestionIssues(input.tenantId, assignable)
+      : 0;
     if (assignable.length) {
       await this.repository.recordAuditLog({
         tenantId: input.tenantId,
@@ -271,7 +274,8 @@ export class SupplierService {
           sourcingType: input.sourcingType ?? null,
           created,
           updated,
-          missingParts
+          missingParts,
+          resolvedIngestionIssues: resolvedIssues
         }
       });
     }

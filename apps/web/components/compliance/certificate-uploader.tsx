@@ -125,15 +125,17 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
       if (mode === 'file' && file) {
         const uploadedDocument = await uploadDocument(file);
         const extension = file.name.split('.').pop()?.toLowerCase();
-        const isCsv = extension === 'csv';
-        if (supplierScope === 'auto' && !isCsv) {
-          throw new Error('Auto supplier detection is only available for CSV uploads');
-        }
-        const requiresSupplierSelection = supplierScope === 'single' || !isCsv;
-        if (requiresSupplierSelection && !supplierId) {
+        const supplierResolution: SupplierResolution =
+          supplierScope === 'auto'
+            ? {
+                mode: 'auto',
+                lookup: (partNumber: string) => partSupplierAssignments.get(partNumber)?.supplierId
+              }
+            : { mode: 'single', supplierId };
+        if (supplierResolution.mode === 'single' && !supplierResolution.supplierId) {
           throw new Error('Select a supplier before uploading certificates');
         }
-        if (supplierScope === 'auto' && partSupplierAssignments.size === 0) {
+        if (supplierResolution.mode === 'auto' && partSupplierAssignments.size === 0) {
           throw new Error(
             'Auto supplier detection requires component_suppliers assignments. Map BOM parts to suppliers first.'
           );
@@ -142,19 +144,12 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
         let certificates: CertificatePayload[];
         if (extension === 'xml') {
           const content = await file.text();
-          certificates = parseReachXml(content, supplierId, certType, uploadedDocument.id);
+          certificates = parseReachXml(content, supplierResolution, certType, uploadedDocument.id);
         } else if (extension === 'csv') {
           const content = await file.text();
-          const supplierResolution: SupplierResolution =
-            supplierScope === 'auto'
-              ? {
-                  mode: 'auto',
-                  lookup: (partNumber: string) => partSupplierAssignments.get(partNumber)?.supplierId
-                }
-              : { mode: 'single', supplierId };
           certificates = parseCertificateCsv(content, supplierResolution, certType, uploadedDocument.id);
         } else if (extension === 'pdf') {
-          certificates = await parseCertificatePdf(uploadedDocument.id, supplierId, certType);
+          certificates = await parseCertificatePdf(uploadedDocument.id, supplierResolution, certType);
         } else {
           throw new Error('Unsupported file type. Please upload CSV, XML, or PDF files.');
         }
@@ -322,8 +317,8 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
             </div>
             <p className="text-xs text-slate-500">
               Auto detection reads Architecture.md §6 <code className="font-mono">component_suppliers</code> ownership
-              from the latest BOM (via the dashboard snapshot). CSV uploads can then include multiple suppliers in a
-              single file. XML/PDF uploads still require selecting a supplier.
+              from the latest BOM (via the dashboard snapshot). Any file upload can include multiple suppliers in a
+              single submission once parts are mapped.
             </p>
             {supplierScope === 'auto' && (
               <p className="text-xs text-slate-400">
@@ -565,11 +560,7 @@ function parseCertificateCsv(
           ]
         : [];
 
-    const resolvedSupplierId =
-      supplierResolution.mode === 'single'
-        ? supplierResolution.supplierId
-        : supplierResolution.lookup(partNumber);
-
+    const resolvedSupplierId = resolveSupplierIdForPart(partNumber, supplierResolution);
     if (!resolvedSupplierId) {
       if (!missingSupplierParts.includes(partNumber)) {
         missingSupplierParts.push(partNumber);
@@ -590,15 +581,7 @@ function parseCertificateCsv(
   });
 
   if (missingSupplierParts.length > 0) {
-    const [head, ...rest] = missingSupplierParts;
-    const preview = rest.length ? `${head}, ${rest.slice(0, 2).join(', ')}` : head;
-    const remaining = rest.length - 2;
-    const suffix = remaining > 0 ? ` (+${remaining} more)` : '';
-    throw new Error(
-      `Auto supplier detection could not find component_suppliers ownership for part${
-        missingSupplierParts.length > 1 ? 's' : ''
-      } ${preview}${suffix}. Map these parts in Supplier Management or include a supplierId column in the CSV.`
-    );
+    throw buildMissingSupplierError(missingSupplierParts);
   }
 
   if (certificates.length === 0) {
@@ -610,7 +593,7 @@ function parseCertificateCsv(
 
 function parseReachXml(
   content: string,
-  supplierId: string,
+  supplierResolution: SupplierResolution,
   certType: CertType,
   sourceDocumentId: string
 ): CertificatePayload[] {
@@ -626,11 +609,21 @@ function parseReachXml(
     throw new Error('XML does not include any <Part> elements');
   }
 
-  const certificates = parts.map((part, index) => {
-    const partNumber = part.getElementsByTagName('PartNumber')[0]?.textContent?.trim();
-    if (!partNumber) {
-      throw new Error(`Part entry #${index + 1} is missing a <PartNumber>`);
-    }
+  const missingSupplierParts: string[] = [];
+
+  const certificates = parts
+    .map((part, index) => {
+      const partNumber = part.getElementsByTagName('PartNumber')[0]?.textContent?.trim();
+      if (!partNumber) {
+        throw new Error(`Part entry #${index + 1} is missing a <PartNumber>`);
+      }
+      const resolvedSupplierId = resolveSupplierIdForPart(partNumber, supplierResolution);
+      if (!resolvedSupplierId) {
+        if (!missingSupplierParts.includes(partNumber)) {
+          missingSupplierParts.push(partNumber);
+        }
+        return null;
+      }
 
     const declarationDate = part.getElementsByTagName('DeclarationDate')[0]?.textContent?.trim() || null;
     const validUntil = part.getElementsByTagName('ValidUntil')[0]?.textContent?.trim() || null;
@@ -670,7 +663,7 @@ function parseReachXml(
     });
 
     return {
-      supplierId,
+      supplierId: resolvedSupplierId,
       partNumber,
       type: certType,
       declarationDate,
@@ -679,34 +672,54 @@ function parseReachXml(
       sourceDocumentId,
       findings
     };
-  });
+    })
+    .filter((cert): cert is CertificatePayload => Boolean(cert));
+
+  if (missingSupplierParts.length > 0) {
+    throw buildMissingSupplierError(missingSupplierParts);
+  }
 
   return certificates;
 }
 
 async function parseCertificatePdf(
   sourceDocumentId: string,
-  supplierId: string,
+  supplierResolution: SupplierResolution,
   certType: CertType
 ): Promise<CertificatePayload[]> {
   const parsed = await fetchCoraParsedParts(sourceDocumentId);
+  const missingSupplierParts: string[] = [];
   const certificates: CertificatePayload[] = parsed.parts
     .filter((part) => Boolean(part.partNumber?.trim()))
-    .map((part) => ({
-      supplierId,
-      partNumber: part.partNumber,
-      type: certType,
-      declarationDate: null,
-      validUntil: null,
-      thresholdPpm: null,
-      sourceDocumentId,
-      findings: part.findings.map((finding) => ({
-        substanceName: finding.substanceName,
-        concentrationValue: finding.concentrationValue,
-        concentrationUnit: finding.concentrationUnit ?? undefined,
-        concentrationRaw: normalizeOptionalText(finding.notes ?? undefined)
-      }))
-    }));
+    .map((part) => {
+      const resolvedSupplierId = resolveSupplierIdForPart(part.partNumber, supplierResolution);
+      if (!resolvedSupplierId) {
+        if (!missingSupplierParts.includes(part.partNumber)) {
+          missingSupplierParts.push(part.partNumber);
+        }
+        return null;
+      }
+      return {
+        supplierId: resolvedSupplierId,
+        partNumber: part.partNumber,
+        type: certType,
+        declarationDate: null,
+        validUntil: null,
+        thresholdPpm: null,
+        sourceDocumentId,
+        findings: part.findings.map((finding) => ({
+          substanceName: finding.substanceName,
+          concentrationValue: finding.concentrationValue,
+          concentrationUnit: finding.concentrationUnit ?? undefined,
+          concentrationRaw: normalizeOptionalText(finding.notes ?? undefined)
+        }))
+      };
+    })
+    .filter((cert): cert is CertificatePayload => Boolean(cert));
+
+  if (missingSupplierParts.length > 0) {
+    throw buildMissingSupplierError(missingSupplierParts);
+  }
 
   if (certificates.length === 0) {
     throw new Error('CORA parsing did not return any certificate parts for this PDF');
@@ -765,4 +778,23 @@ function normalizeOptionalText(value?: string | null): string | undefined {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function resolveSupplierIdForPart(partNumber: string, supplierResolution: SupplierResolution): string | undefined {
+  if (supplierResolution.mode === 'single') {
+    return supplierResolution.supplierId;
+  }
+  return supplierResolution.lookup(partNumber);
+}
+
+function buildMissingSupplierError(missingSupplierParts: string[]): Error {
+  const [head, ...rest] = missingSupplierParts;
+  const preview = rest.length ? `${head}, ${rest.slice(0, 2).join(', ')}` : head;
+  const remaining = rest.length - 2;
+  const suffix = remaining > 0 ? ` (+${remaining} more)` : '';
+  return new Error(
+    `Auto supplier detection could not find component_suppliers ownership for part${
+      missingSupplierParts.length > 1 ? 's' : ''
+    } ${preview}${suffix}. Map these parts in Supplier Management or include a supplierId column in the upload.`
+  );
 }
