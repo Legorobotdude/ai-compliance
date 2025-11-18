@@ -30,6 +30,19 @@ type SupplierOption = {
   name: string;
 };
 
+type CoraParsedFinding = {
+  substanceName: string;
+  concentrationValue: number | null;
+  concentrationUnit: '%' | 'ppm' | 'mg/kg' | null;
+  concentrationPpm: number | null;
+  notes: string | null;
+};
+
+type CoraParsedPart = {
+  partNumber: string;
+  findings: CoraParsedFinding[];
+};
+
 type CertificateFindingPayload = {
   substanceName: string;
   concentrationValue?: number | null;
@@ -91,14 +104,20 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
         throw new Error('Select a supplier before uploading certificates');
       }
       if (mode === 'file' && file) {
-        const [uploadedDocument, content] = await Promise.all([uploadDocument(file), file.text()]);
+        const uploadedDocument = await uploadDocument(file);
         const extension = file.name.split('.').pop()?.toLowerCase();
 
         let certificates: CertificatePayload[];
         if (extension === 'xml') {
+          const content = await file.text();
           certificates = parseReachXml(content, supplierId, certType, uploadedDocument.id);
-        } else {
+        } else if (extension === 'csv') {
+          const content = await file.text();
           certificates = parseCertificateCsv(content, supplierId, certType, uploadedDocument.id);
+        } else if (extension === 'pdf') {
+          certificates = await parseCertificatePdf(uploadedDocument.id, supplierId, certType);
+        } else {
+          throw new Error('Unsupported file type. Please upload CSV, XML, or PDF files.');
         }
 
         payload = { certificates };
@@ -511,6 +530,63 @@ function parseReachXml(
   });
 
   return certificates;
+}
+
+async function parseCertificatePdf(
+  sourceDocumentId: string,
+  supplierId: string,
+  certType: CertType
+): Promise<CertificatePayload[]> {
+  const parsed = await fetchCoraParsedParts(sourceDocumentId);
+  const certificates: CertificatePayload[] = parsed.parts
+    .filter((part) => Boolean(part.partNumber?.trim()))
+    .map((part) => ({
+      supplierId,
+      partNumber: part.partNumber,
+      type: certType,
+      declarationDate: null,
+      validUntil: null,
+      thresholdPpm: null,
+      sourceDocumentId,
+      findings: part.findings.map((finding) => ({
+        substanceName: finding.substanceName,
+        concentrationValue: finding.concentrationValue,
+        concentrationUnit: finding.concentrationUnit ?? undefined,
+        concentrationRaw: finding.notes
+      }))
+    }));
+
+  if (certificates.length === 0) {
+    throw new Error('CORA parsing did not return any certificate parts for this PDF');
+  }
+
+  return certificates;
+}
+
+async function fetchCoraParsedParts(documentId: string): Promise<{ parts: CoraParsedPart[] }> {
+  const response = await fetch('/api/ai/parse-document', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ documentId, schema: 'certificate_v1' })
+  });
+  const payload = (await safeJson(response)) as
+    | ({ parts: CoraParsedPart[] } & Record<string, unknown>)
+    | { error?: string }
+    | undefined;
+
+  if (!response.ok) {
+    const message =
+      payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string'
+        ? payload.error
+        : `CORA parsing failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  if (!payload || !('parts' in payload) || !Array.isArray(payload.parts)) {
+    throw new Error('CORA parsing response was malformed');
+  }
+
+  return { parts: payload.parts as CoraParsedPart[] };
 }
 
 function normalizeHeader(header: string): string {
