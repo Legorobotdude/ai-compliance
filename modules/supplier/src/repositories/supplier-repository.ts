@@ -67,6 +67,59 @@ const supplierRequestColumns = (alias?: string) => `
 export class SupplierRepository {
   constructor(private readonly db: DatabaseClient) {}
 
+  async listSuppliers(
+    tenantId: TenantID,
+    options: { limit?: number; search?: string } = {}
+  ): Promise<Supplier[]> {
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+    const values: Array<string | TenantID | number> = [tenantId];
+    const filters: string[] = ['tenant_id = $1'];
+    if (options.search && options.search.trim().length) {
+      values.push(`%${options.search.trim()}%`);
+      filters.push(`(name ilike $${values.length} or country ilike $${values.length})`);
+    }
+    values.push(limit);
+    return this.db.query<Supplier>({
+      text: `
+        select ${SUPPLIER_COLUMNS}
+        from suppliers
+        where ${filters.join(' and ')}
+        order by name asc
+        limit $${values.length}
+      `,
+      values
+    });
+  }
+
+  async createSupplier(payload: {
+    tenantId: TenantID;
+    name: string;
+    country: string;
+    language: string;
+    complianceRate: number;
+    responseAvgDays: number;
+  }): Promise<Supplier> {
+    const [row] = await this.db.query<Supplier>({
+      text: `
+        insert into suppliers (tenant_id, name, country, language, compliance_rate, response_avg_days)
+        values ($1,$2,$3,$4,$5,$6)
+        returning ${SUPPLIER_COLUMNS}
+      `,
+      values: [
+        payload.tenantId,
+        payload.name,
+        payload.country,
+        payload.language,
+        payload.complianceRate,
+        payload.responseAvgDays
+      ]
+    });
+    if (!row) {
+      throw new Error('Failed to create supplier');
+    }
+    return row;
+  }
+
   async findSupplier(tenantId: TenantID, supplierId: UUID): Promise<Supplier | null> {
     const rows = await this.db.query<Supplier>({
       text: `select ${SUPPLIER_COLUMNS}
@@ -75,6 +128,86 @@ export class SupplierRepository {
       values: [tenantId, supplierId]
     });
     return rows[0] ?? null;
+  }
+
+  async listKnownPartNumbers(tenantId: TenantID, partNumbers: string[]): Promise<string[]> {
+    if (partNumbers.length === 0) {
+      return [];
+    }
+    const rows = await this.db.query<{ partNumber: string }>({
+      text: `
+        select distinct part_number as "partNumber"
+        from bom_components
+        where tenant_id = $1
+          and part_number = any($2::text[])
+      `,
+      values: [tenantId, partNumbers]
+    });
+    return rows.map((row) => row.partNumber);
+  }
+
+  async upsertComponentSuppliers(payload: {
+    tenantId: TenantID;
+    supplierId: UUID;
+    partNumbers: string[];
+    sourcingType?: 'PRIMARY' | 'SECONDARY' | 'CONTRACT';
+  }): Promise<Array<{ partNumber: string; inserted: boolean }>> {
+    if (payload.partNumbers.length === 0) {
+      return [];
+    }
+    return this.db.query<{ partNumber: string; inserted: boolean }>({
+      text: `
+        with part_input as (
+          select unnest($4::text[]) as part_number
+        )
+        insert into component_suppliers (tenant_id, part_number, supplier_id, sourcing_type)
+        select $1, part_input.part_number, $2, $3
+        from part_input
+        on conflict (tenant_id, part_number, supplier_id)
+        do update set
+          sourcing_type = excluded.sourcing_type,
+          updated_at = now()
+        returning part_number as "partNumber", (xmax = 0) as inserted
+      `,
+      values: [payload.tenantId, payload.supplierId, payload.sourcingType ?? null, payload.partNumbers]
+    });
+  }
+
+  async listUnassignedParts(
+    tenantId: TenantID,
+    bomId: UUID,
+    limit: number
+  ): Promise<Array<{ bomId: UUID; partNumber: string; assemblyId: string; assemblyName: string | null }>> {
+    return this.db.query<{
+      bomId: UUID;
+      partNumber: string;
+      assemblyId: string;
+      assemblyName: string | null;
+    }>({
+      text: `
+        select
+          bc.bom_id as "bomId",
+          bc.part_number as "partNumber",
+          bc.assembly_id as "assemblyId",
+          sa.name as "assemblyName"
+        from bom_components bc
+        left join bom_subassemblies sa
+          on sa.tenant_id = bc.tenant_id
+         and sa.bom_id = bc.bom_id
+         and sa.assembly_id = bc.assembly_id
+        where bc.tenant_id = $1
+          and bc.bom_id = $2
+          and not exists (
+            select 1
+            from component_suppliers cs
+            where cs.tenant_id = bc.tenant_id
+              and cs.part_number = bc.part_number
+          )
+        order by bc.part_number asc
+        limit $3
+      `,
+      values: [tenantId, bomId, limit]
+    });
   }
 
   async listContacts(tenantId: TenantID, supplierId: UUID): Promise<SupplierContact[]> {

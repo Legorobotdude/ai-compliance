@@ -7,9 +7,11 @@
     "dev": "bash ./scripts/dev.sh",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
-    "test": "pnpm -r test",
+    "test": "vitest run",
     "db:migrate": "pnpm --filter @certivo/lib-db migrate",
     "db:seed": "pnpm --filter @certivo/lib-db seed",
+    "db:seed-user": "tsx ./libs/db/scripts/seed-user.mjs",
+    "db:wipe": "docker exec certivo-postgres psql -U certivo -d certivo -c \"DROP SCHEMA IF EXISTS regulation_embeddings CASCADE; DROP SCHEMA IF EXISTS app_private CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO certivo; GRANT ALL ON SCHEMA public TO public;\" && pnpm db:migrate",
     "lab:test": "node scripts/lab-smoke.mjs",
     "risk:test": "node scripts/risk-impact-smoke.mjs"
   },
@@ -25,9 +27,12 @@
     "@types/pg": "^8.15.6",
     "@typescript-eslint/eslint-plugin": "^8.46.4",
     "@typescript-eslint/parser": "^8.46.4",
+    "@vitest/coverage-v8": "^4.0.10",
     "eslint": "^9.39.1",
     "pg": "^8.16.3",
+    "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.46.4"
+    "typescript-eslint": "^8.46.4",
+    "vitest": "^4.0.10"
   }
 }

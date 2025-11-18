@@ -5,8 +5,7 @@ import { ComplianceController, ComplianceRepository, ComplianceService } from '@
 import {
   SupplierController,
   SupplierRepository,
-  SupplierService,
-  type SupplierWorkflowScheduler
+  SupplierService
 } from '@certivo/supplier';
 import { RiskImpactController, RiskImpactService, RiskRepository } from '@certivo/risk-impact';
 import {
@@ -109,23 +108,12 @@ export class ApiModuleFactory {
       `${documentsBaseUrl.replace(/\/$/, '')}/supplier/upload`;
     const workflowRepo = new WorkflowRepository(options.db);
     const workflowService = new WorkflowService(workflowRepo, options.workflowClient);
-    const supplierWorkflowScheduler: SupplierWorkflowScheduler = {
-      async scheduleSupplierRequest(trigger) {
-        await workflowService.queueSupplierWorkflow({
-          tenantId: trigger.tenantId,
-          supplierId: trigger.supplierId,
-          bomId: trigger.bomId,
-          dueAt: trigger.dueAt,
-          requestId: trigger.requestId
-        });
-      }
-    };
 
     const supplierService = new SupplierService(supplierRepo, {
       coraService,
       uploadPortalUrl: supplierUploadUrl,
       recentRequestsLimit: options.supplier?.recentRequestsLimit,
-      workflowScheduler: supplierWorkflowScheduler
+      workflowService
     });
     const supplierController = new SupplierController(supplierService);
 

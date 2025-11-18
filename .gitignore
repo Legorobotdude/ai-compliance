@@ -73,3 +73,5 @@ pnpm-debug.log*
 .next/
 **/.next/
 out/
+apps/api/api_test_output.txt
+libs/auth/auth_test_output.txt

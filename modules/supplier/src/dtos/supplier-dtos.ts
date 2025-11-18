@@ -6,9 +6,25 @@ import type {
   UUID
 } from '@certivo/lib-db';
 
+export interface SupplierListRequest {
+  tenantId: TenantID;
+  limit?: number;
+  search?: string;
+}
+
 export interface ScorecardRequest {
   tenantId: TenantID;
   supplierId: UUID;
+}
+
+export interface SupplierCreateInput {
+  tenantId: TenantID;
+  name: string;
+  country: string;
+  language: string;
+  complianceRate: number;
+  responseAvgDays: number;
+  createdBy?: UUID | null;
 }
 
 export type SupplierRequestTone = 'formal' | 'neutral' | 'friendly';
@@ -71,6 +87,22 @@ export interface SupplierRequestInput {
   languageOverride?: string;
 }
 
+export interface SupplierAssignmentInput {
+  tenantId: TenantID;
+  supplierId: UUID;
+  partNumbers: string[];
+  sourcingType?: 'PRIMARY' | 'SECONDARY' | 'CONTRACT';
+  actorUserId?: UUID | null;
+}
+
+export interface SupplierAssignmentResult {
+  supplierId: UUID;
+  partNumbers: string[];
+  created: number;
+  updated: number;
+  missingParts: string[];
+}
+
 export interface SupplierRequestResult {
   requestId: UUID;
   status: SupplierRequest['status'];
@@ -78,4 +110,17 @@ export interface SupplierRequestResult {
   blockedParts: SupplierBlockedPart[];
   emailDraft: SupplierEmailDraft;
   workflowScheduled: boolean;
+}
+
+export interface SupplierUnassignedPartsRequest {
+  tenantId: TenantID;
+  bomId: UUID;
+  limit?: number;
+}
+
+export interface SupplierUnassignedPart {
+  bomId: UUID;
+  partNumber: string;
+  assemblyId: string;
+  assemblyName?: string | null;
 }

@@ -13,6 +13,7 @@
 * **CORA AI Module** (co-located Python FastAPI via sidecar or Node worker): Manages prompt templates, retries/guardrails, JSON schema validation, and LLM provider clients. Exposes an internal RPC interface used by Compliance and Supplier modules (via in-process adapters or HTTP calls to the sidecar). Stores `llm_calls`, prompt hashes, and links outputs to audit logs. Supports temperature/model overrides per tenant and throttles to avoid burst spend. (Done)
 * **Risk/Impact Module**: Maintains regulation catalogs, limit sliders, impact simulations, trend caches, and the risk scoring formulas. Consumes Compliance status snapshots (via DB views + cache invalidation events) and exposes scenario diffs with supplier/assembly rollups. Generates pre-computed heatmaps for the dashboard and feeds alerting thresholds into the Jobs module. (Mostly done)
 * **Supplier Module**: Manages suppliers, contacts, `component_suppliers`, SLA tracking, request workflows, and integrates with CORA to draft outreach. Owns `/supplier/scorecard`, calculates response KPIs, reconciles inbound responses/webhooks, and triggers escalations. Emits audit events and updates scorecards when requests close or expire; also publishes “slow responder” events for Ops Center widgets.
+  * Provides CRUD helpers for supplier records (`GET/POST /suppliers`), bulk ownership mapping (`POST /suppliers/assignments`), and visibility into unmapped BOM parts (`GET /suppliers/unassigned-parts`) so analysts can seed ownership immediately after BOM ingestion instead of relying on seed data.
 * **File/Document Module**: Handles uploads (pre-signed URLs), virus scanning hooks, document metadata, storage refs (S3/MinIO), and ties files to BOMs/certificates. Provides document fetch APIs for CORA parsing, manages retention policies, and enforces tenant-level encryption keys. Coordinates with Compliance to stash parsed JSON snapshots. (Done, S3 not tested)
 * **Jobs & Workflow Module**: Temporal workers living in the same repo, consuming queues for ingestion retries, supplier reminders, LLM reprocess tasks, and impact simulations. Provides an internal DSL for defining workflows so business logic stays versioned with code. Includes heartbeat monitors and dead-letter handling surfaced to the Ops Center. (Done, stubbed workflows)
 * **Search/RAG Module**: Manages embeddings (pgvector/Qdrant), regulation corpora ingestion, and retrieval helpers injected into CORA prompts or dashboard search. Shares the same Postgres connection to reuse tenant scoping, periodically updates embeddings, and exposes semantic search endpoints for compliance texts.
@@ -108,6 +109,14 @@
 **GET** `/merged?bom_id=…`
 
 * Returns BOM components with assembly context, supplier ownership (`component_suppliers`), and latest findings/status, e.g., CU-78901 has Lead finding 0.09% (=900 ppm).
+
+**GET** `/suppliers?limit=&search=` – paginated supplier roster; feeds dashboard + compliance panel dropdowns.
+
+**POST** `/suppliers` – create tenant-scoped supplier (name/country/language/compliance_rate/response_days) and emit `audit_logs`.
+
+**POST** `/suppliers/assignments` – body `{ supplier_id, part_numbers[], sourcing_type? }`; upserts `component_suppliers` rows so BOM parts can trigger supplier workflows.
+
+**GET** `/suppliers/unassigned-parts?bom_id=…&limit=…` – returns BOM parts that still lack ownership to drive the compliance page’s “map suppliers” tab.
 
 **GET** `/supplier/scorecard?supplier_id=…`
 
@@ -267,6 +276,7 @@ else: COMPLIANT
 * **Audit & LLM Logs**: Prompt/response metadata (hashed prompt), latency, outcome.
 * **Ingestion Ops Center**: Stream of BOM/cert upload issues (missing suppliers, blank concentrations) with retry buttons and supplier auto-trigger statuses.
 * **Supplier SLA Monitor**: Leaderboard of slow responders vs SLA target, highlighting workflow escalations.
+* **Supplier Management Panel**: On `/compliance` next to ingestion cards; lets analysts create suppliers or paste JSON arrays (e.g., `Sample Data/suppliers.json`) for bulk import and immediately assign unmapped BOM parts through `/suppliers/assignments` so workflows don’t fail when BOM uploads lack seeded suppliers.
 
 **Components:**
 

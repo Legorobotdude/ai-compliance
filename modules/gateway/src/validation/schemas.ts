@@ -12,6 +12,7 @@ import type {
   AiRiskSummaryRequest,
   AiSupplierEmailRequest
 } from '@certivo/cora';
+import type { SupplierAssignmentInput, SupplierCreateInput } from '@certivo/supplier';
 
 export const uuidSchema = () => z.string().uuid();
 const uuid = uuidSchema;
@@ -31,6 +32,28 @@ export const supplierRequestSchema = z
     languageOverride: z.string().min(2).max(5).optional()
   })
   .strict() satisfies z.ZodType<SupplierRequestInput>;
+
+export const supplierCreateSchema = z
+  .object({
+    tenantId: z.string().min(1),
+    name: z.string().min(1),
+    country: z.string().min(1),
+    language: z.string().min(2).max(5),
+    complianceRate: z.number().min(0).max(1),
+    responseAvgDays: z.number().positive(),
+    createdBy: uuid().optional()
+  })
+  .strict() satisfies z.ZodType<SupplierCreateInput>;
+
+export const supplierAssignmentSchema = z
+  .object({
+    tenantId: z.string().min(1),
+    supplierId: uuid(),
+    partNumbers: z.array(z.string().min(1)).min(1),
+    sourcingType: z.enum(['PRIMARY', 'SECONDARY', 'CONTRACT']).optional(),
+    actorUserId: uuid().optional()
+  })
+  .strict() satisfies z.ZodType<SupplierAssignmentInput>;
 
 const impactLimitOverrideSchema = z
   .object({

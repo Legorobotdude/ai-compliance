@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface CertificateUploaderProps {
   onUploadComplete?: () => void;
@@ -24,15 +24,32 @@ interface CertificateUploadResponse {
 type UploadMode = 'file' | 'json';
 type CertType = 'ROHS' | 'REACH' | 'CUSTOM';
 
+type SupplierOption = {
+  id: string;
+  name: string;
+};
+
 export function CertificateUploader({ onUploadComplete }: CertificateUploaderProps) {
   const [mode, setMode] = useState<UploadMode>('file');
   const [file, setFile] = useState<File | null>(null);
   const [jsonInput, setJsonInput] = useState('');
   const [certType, setCertType] = useState<CertType>('ROHS');
   const [supplierId, setSupplierId] = useState('');
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+  const [supplierError, setSupplierError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CertificateUploadResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetchSuppliers();
+  }, []);
+
+  useEffect(() => {
+    if (!supplierId && suppliers.length > 0) {
+      setSupplierId(suppliers[0]!.id);
+    }
+  }, [suppliers, supplierId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -51,6 +68,9 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
     try {
       let payload: Record<string, unknown>;
 
+      if (mode === 'file' && !supplierId) {
+        throw new Error('Select a supplier before uploading certificates');
+      }
       if (mode === 'file' && file) {
         // For file mode, we'll parse the content and structure it
         const content = await file.text();
@@ -109,6 +129,21 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
       setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSuppliers = async () => {
+    try {
+      const response = await fetch('/api/suppliers?limit=100');
+      if (!response.ok) {
+        const body = (await safeJson(response)) as { error?: string } | undefined;
+        throw new Error(body?.error ?? `Failed to load suppliers (${response.status})`);
+      }
+      const payload = (await response.json()) as { suppliers: Array<{ id: string; name: string }> };
+      setSuppliers(payload.suppliers);
+      setSupplierError(payload.suppliers.length ? null : 'No suppliers found. Create one on the compliance page.');
+    } catch (error) {
+      setSupplierError(error instanceof Error ? error.message : 'Unable to load suppliers');
     }
   };
 
@@ -175,20 +210,30 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
           </select>
         </div>
 
-        {/* Supplier ID (for file mode) */}
+        {/* Supplier selector */}
         {mode === 'file' && (
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
-              Supplier ID *
+              Supplier *
             </label>
-            <input
-              type="text"
+            <select
               value={supplierId}
               onChange={(e) => setSupplierId(e.target.value)}
-              placeholder="e.g., SUP-101"
               className="w-full px-3 py-2 bg-slate-800 border border-slate-700 text-white rounded-md focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+              disabled={!suppliers.length}
               required
-            />
+            >
+              {suppliers.map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </option>
+              ))}
+            </select>
+            {supplierError && (
+              <p className="mt-1 text-xs text-rose-300">
+                {supplierError}
+              </p>
+            )}
           </div>
         )}
 
@@ -306,4 +351,12 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
       )}
     </div>
   );
+}
+
+async function safeJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return undefined;
+  }
 }

@@ -7,13 +7,19 @@ import type { CoraService } from '@certivo/cora';
 import type {
   ScorecardRequest,
   ScorecardResponse,
+  SupplierAssignmentInput,
+  SupplierAssignmentResult,
   SupplierBlockedPart,
+  SupplierCreateInput,
   SupplierEmailDraft,
+  SupplierListRequest,
   SupplierProfile,
   SupplierRequestInput,
   SupplierRequestResult,
   SupplierRequestSummary,
-  SupplierScorecardStats
+  SupplierScorecardStats,
+  SupplierUnassignedPart,
+  SupplierUnassignedPartsRequest
 } from '../dtos/supplier-dtos.js';
 import type { BomSummary, SupplierRepository, SupplierRequestMetrics, SupplierRequestRecord } from '../repositories/supplier-repository.js';
 
@@ -34,14 +40,32 @@ export interface SupplierWorkflowScheduler {
 }
 
 class NoopSupplierWorkflowScheduler implements SupplierWorkflowScheduler {
-  async scheduleSupplierRequest(): Promise<void> {
-    // Stubbed until Temporal workers are wired.
+  constructor(private readonly logger: Logger) {}
+
+  async scheduleSupplierRequest(trigger: SupplierWorkflowTrigger): Promise<void> {
+    this.logger.warn(
+      { trigger },
+      'supplier.workflow.scheduler_missing'
+    );
+  }
+}
+
+export interface SupplierWorkflowQueueService {
+  queueSupplierWorkflow(trigger: SupplierWorkflowTrigger): Promise<void>;
+}
+
+class WorkflowServiceSupplierScheduler implements SupplierWorkflowScheduler {
+  constructor(private readonly workflowService: SupplierWorkflowQueueService) {}
+
+  async scheduleSupplierRequest(trigger: SupplierWorkflowTrigger): Promise<void> {
+    await this.workflowService.queueSupplierWorkflow(trigger);
   }
 }
 
 export interface SupplierServiceOptions {
   coraService?: CoraService;
   workflowScheduler?: SupplierWorkflowScheduler;
+  workflowService?: SupplierWorkflowQueueService;
   logger?: Logger;
   uploadPortalUrl?: string;
   recentRequestsLimit?: number;
@@ -49,8 +73,8 @@ export interface SupplierServiceOptions {
 
 export class SupplierService {
   private readonly cora?: CoraService;
-  private readonly workflowScheduler: SupplierWorkflowScheduler;
   private readonly logger: Logger;
+  private readonly workflowScheduler: SupplierWorkflowScheduler;
   private readonly uploadPortalUrl: string;
   private readonly recentRequestsLimit: number;
 
@@ -59,8 +83,14 @@ export class SupplierService {
     options: SupplierServiceOptions = {}
   ) {
     this.cora = options.coraService;
-    this.workflowScheduler = options.workflowScheduler ?? new NoopSupplierWorkflowScheduler();
     this.logger = options.logger ?? createLogger({ name: 'supplier-service' });
+    if (options.workflowScheduler) {
+      this.workflowScheduler = options.workflowScheduler;
+    } else if (options.workflowService) {
+      this.workflowScheduler = new WorkflowServiceSupplierScheduler(options.workflowService);
+    } else {
+      this.workflowScheduler = new NoopSupplierWorkflowScheduler(this.logger);
+    }
     this.uploadPortalUrl = options.uploadPortalUrl ?? DEFAULT_UPLOAD_URL;
     this.recentRequestsLimit = options.recentRequestsLimit ?? DEFAULT_RECENT_REQUESTS_LIMIT;
   }
@@ -168,6 +198,95 @@ export class SupplierService {
       emailDraft,
       workflowScheduled
     };
+  }
+
+  async listSuppliers(request: SupplierListRequest): Promise<Supplier[]> {
+    return this.repository.listSuppliers(request.tenantId, {
+      limit: request.limit,
+      search: request.search
+    });
+  }
+
+  async createSupplier(input: SupplierCreateInput): Promise<Supplier> {
+    const complianceRate = clampNumber(input.complianceRate, 0, 1);
+    const responseDays = Math.max(1, Math.round(input.responseAvgDays));
+    const supplier = await this.repository.createSupplier({
+      tenantId: input.tenantId,
+      name: input.name.trim(),
+      country: input.country.trim(),
+      language: input.language.trim().toLowerCase(),
+      complianceRate,
+      responseAvgDays: responseDays
+    });
+    await this.repository.recordAuditLog({
+      tenantId: input.tenantId,
+      actorUserId: input.createdBy ?? null,
+      action: 'supplier.created',
+      target: `supplier:${supplier.id}`,
+      payload: {
+        name: supplier.name,
+        country: supplier.country,
+        language: supplier.language,
+        complianceRate,
+        responseAvgDays: responseDays
+      }
+    });
+    return supplier;
+  }
+
+  async assignSupplierToParts(input: SupplierAssignmentInput): Promise<SupplierAssignmentResult> {
+    const supplier = await this.requireSupplier(input.tenantId, input.supplierId);
+    const normalizedParts = Array.from(
+      new Set(
+        input.partNumbers
+          .map((part) => part.trim())
+          .filter((part) => part.length > 0)
+      )
+    );
+    if (!normalizedParts.length) {
+      throw new Error('At least one part number is required');
+    }
+    const knownParts = await this.repository.listKnownPartNumbers(input.tenantId, normalizedParts);
+    const knownSet = new Set(knownParts);
+    const assignable = normalizedParts.filter((part) => knownSet.has(part));
+    const missingParts = normalizedParts.filter((part) => !knownSet.has(part));
+    const upsertResults = assignable.length
+      ? await this.repository.upsertComponentSuppliers({
+          tenantId: input.tenantId,
+          supplierId: supplier.id,
+          partNumbers: assignable,
+          sourcingType: input.sourcingType
+        })
+      : [];
+    const created = upsertResults.filter((row) => row.inserted).length;
+    const updated = upsertResults.length - created;
+    if (assignable.length) {
+      await this.repository.recordAuditLog({
+        tenantId: input.tenantId,
+        actorUserId: input.actorUserId ?? null,
+        action: 'supplier.parts.assigned',
+        target: `supplier:${supplier.id}`,
+        payload: {
+          partNumbers: assignable,
+          sourcingType: input.sourcingType ?? null,
+          created,
+          updated,
+          missingParts
+        }
+      });
+    }
+    return {
+      supplierId: supplier.id,
+      partNumbers: assignable,
+      created,
+      updated,
+      missingParts
+    };
+  }
+
+  async listUnassignedParts(request: SupplierUnassignedPartsRequest): Promise<SupplierUnassignedPart[]> {
+    const limit = Math.min(Math.max(request.limit ?? 50, 10), 500);
+    return this.repository.listUnassignedParts(request.tenantId, request.bomId, limit);
   }
 
   private async draftSupplierEmail(
@@ -390,4 +509,11 @@ export class SupplierService {
     }
     return supplier;
   }
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  if (Number.isNaN(value)) {
+    return min;
+  }
+  return Math.min(Math.max(value, min), max);
 }

@@ -11,6 +11,7 @@ import { SupplierScorecardProbe } from "@/components/supplier/supplier-scorecard
 import { SupplierOpsSummary } from "@/components/supplier/supplier-ops-summary";
 import { SupplierRiskInsights } from "@/components/supplier/supplier-risk-insights";
 import { DataEmptyState } from "@/components/dashboard/data-empty-state";
+import { SupplierManagementPanel } from "@/components/compliance/supplier-management-panel";
 import { fetchDashboardSnapshot } from "@/lib/api/dashboard";
 
 export const dynamic = "force-dynamic";
@@ -119,6 +120,9 @@ export default async function SupplierShowcasePage() {
       </header>
 
       <SupplierOpsSummary suppliers={snapshot.suppliers} workflowJobs={snapshot.workflowJobs} bom={snapshot.bom} risk={snapshot.risk} />
+      <div className="rounded-3xl border border-slate-800 bg-slate-950/40 p-6">
+        <SupplierManagementPanel bomId={snapshot.bom.id} refreshKey={0} />
+      </div>
 
       <div>
         <SupplierScorecards suppliers={snapshot.suppliers} bomId={snapshot.bom.id} />

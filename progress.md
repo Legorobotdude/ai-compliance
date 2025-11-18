@@ -10,6 +10,7 @@
 - Added `libs/db` defining the shared schema types (BOMs, suppliers, certificates, regulations, etc.) and a Postgres-backed `DatabaseClient` factory using `pg`.
 - Built out module layers (controllers/services/repositories/DTOs) for Compliance, Supplier, Risk/Impact, File/Document, Jobs & Workflows, Search/RAG, and Gateway, all referencing the shared schema.
 - Added `ApiModuleFactory` to wire modules together, and worker bootstrap helpers for Temporal orchestration.
+- Finished the SupplierService workflow hooks per Architecture.md §5 by replacing the placeholder scheduler with the Temporal-backed workflow service so `/supplier/request` reliably enqueues Temporal supplier workflows and surfaces missing wiring via structured warnings.
 
 ## Database & local infra
 - Authored SQL migrations (`infra/db/migrations/*.sql`) to create the Architecture.md §2 data model, helper triggers, the `create_bom` procedure, materialized-style compliance views, and the regulation search function expected by the repositories.
@@ -32,6 +33,7 @@
 
 ## Verification
 - Running `pnpm build`, `pnpm lint`, and `pnpm test` succeeds across the workspace (tests currently stubs).
+- Added `scripts/supplier-workflow-smoke.mjs` to ensure supplier requests enqueue the Temporal workflow via `workflow_events` logging per Architecture.md §5.
 
 ## Frontend dashboard setup
 - Replaced the placeholder web package with a real Next.js 14 + Tailwind app (apps/web) per Architecture.md §6, including shared Role context, TanStack virtual table, Recharts visualizations, Impact Simulator controls, CORA audit feed, Ops Center stream, and SLA monitor gates.
@@ -44,6 +46,8 @@
 - Added Certivo API env helpers plus docs for `CERTIVO_API_URL`/`CERTIVO_API_TOKEN` so `pnpm --filter @certivo/web dev|build` knows how to authenticate against the Express gateway.
 
 ## Recent updates
+- Added a lightweight `libs/db/scripts/seed-user.mjs` utility so developers can provision just the Architecture.md §2 tenant/user rows (no sample BOM) before testing JWT-authenticated uploads; it upserts the default Acme tenant and admin user while respecting RLS bypass toggles.
+- Extended the compliance upload path to auto-provision products per Architecture.md §2: introduced a `/products` API route + shared Zod schema, repository upsert, and audit logging so the Next.js BOM uploader can turn free-form product names into real `products` rows (and UUIDs) before calling `/bom/upload`.
 - Hardened the local dev bootstrap so it keeps the Architecture.md §1 stack running: `scripts/dev.sh` now checks Postgres/Redis before launching the monolith, runs `infra/docker/docker-compose.yml` automatically when the `DATABASE_URL` points to localhost, and starts `temporal server start-dev` when the Temporal address is missing so the API, web, worker, and CORA sidecar don't crash during `pnpm dev`.
 - Added `scripts/dev-docker.sh` so developers who prefer containerized workflows can launch the entire Architecture.md §1 stack (API, web, worker, CORA, Temporal, Postgres, Redis) via `docker-compose.production.yml` with the same `.dev.env` defaults and secret validation as the host-based dev script.
 - Brought the Docker-based dev path to parity with `pnpm dev`: the new script now tears down conflicting containers, the compose stack uses the correct Temporal settings/health checks, CORA’s container exposes `/healthz`, and all Node images run on Debian (Temporal’s native module needs glibc), so `./scripts/dev-docker.sh` can build + start api/web/worker/cora/Temporal/Postgres/Redis without manual fixes.
@@ -52,6 +56,7 @@
 - Plumbed the File/Document module into Search/RAG per Architecture.md §§1 & 4 so CORA can ground responses in real uploads. DocumentService now mirrors inline (`dataBase64`) uploads into `SearchService.ingestDocument` via ApiModuleFactory, emitting `sourceKey=document:<uuid>` metadata, while the new `scripts/rag-backfill-documents.mjs` CLI scans existing `documents` rows (bypassing RLS), loads text from `parsed_json`/local storage, and backfills `regulation_embeddings` so historical certificates/BOMs become searchable without manual `/rag/documents` calls.
 - Delivered the Architecture.md §§1 & 4 Search/RAG story: authored migration `005_search_rag.sql` with `regulation_embeddings.documents/chunks/queries`, pgvector scoring, and `llm_agent=CHAT`; expanded `@certivo/search-rag` with deterministic chunking/embeddings, ingestion endpoints, prompt-context logging, and the Express `/rag/documents` + `/ai/chat` routes wired through the gateway. Added deterministically seeded RAG documents, CORA sidecar chat tooling/prompts, and a Next.js CORA chat panel so conversations retrieve citations before responding.
 - Added the Ops Center experience per Architecture.md §§6–7: extended `@certivo/dashboard` to derive a `workflowJobs` payload from `workflow_events` (supplier + ingestion Temporal traces), wired the Express snapshot endpoint through to Next.js, built a dedicated `/ops-center` page with the new RunningJobs panel plus consolidated audit/ingestion/SLA widgets, and linked it from the main dashboard.
+- Wired the Temporal ingestion retry workflow to the compliance ingestion checks from Architecture.md §1 so `performRetry` now inspects component-supplier mappings, BOM component presence, and certificate data quality before logging `workflow_events`, ensuring Ops Center retries only resolve when the underlying data gaps are actually fixed.
 - Corrected the dev JWT generator (`infra/docker/generate-dev-token.mjs`) to emit HS256 signatures without double-encoding so Architecture.md §7 auth flows accept tokens in local dashboard sessions again.
 - Bootstrapped the local dev runtime: brought up Docker Compose services, ran `pnpm db:migrate`/`pnpm db:seed`, generated the seed tenant JWT, and launched the API (`node dist/main.js`) plus web (`pnpm dev`) with `CERTIVO_API_URL`/`CERTIVO_API_TOKEN` configured. Noted a `/dashboard/snapshot` 500 caused by `impact_scenarios` JSON insertion (see API logs) while verifying the dash fetch.
 - Patched `RiskRepository.recordScenarioResult` to persist structured JSON (regulation metadata + deltas) and rebuilt/restarted services, restoring `/dashboard/snapshot` and the Next.js dashboard to 200 responses.
@@ -117,3 +122,4 @@
 - Broke the CORA risk summary into a reusable card (Architecture.md §4) and surfaced it on both `/cora` and the main dashboard, wiring the card to fetch `/ai/risk-summary` server-side so execs see live compliance stats, severity callouts, and supplier gap chips next to the existing Risk/Impact visualization.
 
 - Improved the no-data experience per Architecture.md §6: the dashboard service now synthesizes a safe fallback snapshot (risk analytics, regulation options, freshness metadata) when no BOM exists, and the dashboard/supplier/risk/CORA pages share a reusable empty-state card so new tenants get guided CTAs instead of runtime errors.
+- Added supplier management end-to-end per Architecture.md §6: the Supplier module now exposes `/suppliers`, `/suppliers/assignments`, and `/suppliers/unassigned-parts` so tenant admins can seed suppliers, write `component_suppliers` rows, and audit missing ownership. Wired matching Next.js proxy routes plus a new Supplier Management panel on `/compliance` that lets users create suppliers, paste JSON payloads (e.g., `Sample Data/suppliers.json`) for bulk import, and assign uploaded BOM parts immediately, refreshing the merged view so supplier outreach and ingestion issues stop erroring when data isn’t pre-seeded.

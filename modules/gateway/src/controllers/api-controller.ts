@@ -7,7 +7,14 @@ import type {
 import { ComplianceController } from '@certivo/compliance';
 import type { ImpactPredictRequest } from '@certivo/risk-impact';
 import { RiskImpactController } from '@certivo/risk-impact';
-import type { ScorecardRequest, SupplierRequestInput } from '@certivo/supplier';
+import type {
+  ScorecardRequest,
+  SupplierAssignmentInput,
+  SupplierCreateInput,
+  SupplierListRequest,
+  SupplierRequestInput,
+  SupplierUnassignedPartsRequest
+} from '@certivo/supplier';
 import { SupplierController } from '@certivo/supplier';
 import type { DownloadUrlRequest, FetchRequest, ListRequest, UploadRequest } from '@certivo/file-document';
 import { DocumentController } from '@certivo/file-document';
@@ -48,9 +55,27 @@ export class ApiController {
     res.status(201).json(result);
   }
 
+  async getSuppliers(
+    req: HttpRequest<unknown, Record<string, string>, { limit?: string; search?: string }>,
+    res: HttpResponse
+  ) {
+    const payload: SupplierListRequest = {
+      tenantId: req.tenantId,
+      limit: parseLimitParam(req.query.limit),
+      search: req.query.search
+    };
+    const suppliers = await this.supplier.listSuppliers(payload);
+    res.status(200).json({ suppliers });
+  }
+
   async postProduct(req: HttpRequest<CreateProductRequest>, res: HttpResponse) {
     const result = await this.compliance.createProduct(req.body);
     res.status(201).json(result);
+  }
+
+  async postSupplier(req: HttpRequest<SupplierCreateInput>, res: HttpResponse) {
+    const supplier = await this.supplier.createSupplier(req.body);
+    res.status(201).json(supplier);
   }
 
   async postCertificateUpload(req: HttpRequest<CertificateUploadRequest>, res: HttpResponse) {
@@ -77,6 +102,11 @@ export class ApiController {
   async getSupplierScorecard(req: HttpRequest<unknown, { supplierId: string }>, res: HttpResponse) {
     const payload: ScorecardRequest = { tenantId: req.tenantId, supplierId: req.params.supplierId as unknown as UUID };
     const result = await this.supplier.scorecard(payload);
+    res.status(200).json(result);
+  }
+
+  async postSupplierAssignment(req: HttpRequest<SupplierAssignmentInput>, res: HttpResponse) {
+    const result = await this.supplier.assignSupplier(req.body);
     res.status(200).json(result);
   }
 
@@ -152,6 +182,22 @@ export class ApiController {
     res.status(200).json(snapshot);
   }
 
+  async getUnassignedParts(
+    req: HttpRequest<unknown, Record<string, string>, { bomId: string; limit?: string }>,
+    res: HttpResponse
+  ) {
+    if (!req.query.bomId) {
+      throw new Error('bomId is required');
+    }
+    const payload: SupplierUnassignedPartsRequest = {
+      tenantId: req.tenantId,
+      bomId: req.query.bomId as unknown as UUID,
+      limit: parseLimitParam(req.query.limit)
+    };
+    const parts = await this.supplier.listUnassignedParts(payload);
+    res.status(200).json({ parts });
+  }
+
   async postAiParseDocument(req: HttpRequest<AiParseDocumentRequest>, res: HttpResponse) {
     const payload: AiParseDocumentRequest = { ...req.body };
     if (!payload.downloadUrl) {
@@ -206,4 +252,15 @@ export class ApiController {
       context
     });
   }
+}
+
+function parseLimitParam(raw?: string): number | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const parsed = Number(raw);
+  if (Number.isNaN(parsed)) {
+    return undefined;
+  }
+  return parsed;
 }

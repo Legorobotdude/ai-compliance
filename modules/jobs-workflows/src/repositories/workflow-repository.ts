@@ -1,4 +1,11 @@
-import type { AuditLogInsert, DatabaseClient, SupplierRequest, TenantID, UUID } from '@certivo/lib-db';
+import type {
+  AuditLogInsert,
+  DatabaseClient,
+  IngestionIssue,
+  SupplierRequest,
+  TenantID,
+  UUID
+} from '@certivo/lib-db';
 
 export type WorkflowEventType = 'SUPPLIER_REQUEST' | 'INGESTION' | 'IMPACT' | 'LLM' | 'SYSTEM';
 
@@ -110,11 +117,90 @@ export class WorkflowRepository {
     });
   }
 
+  async getIngestionIssue(issueId: UUID): Promise<IngestionIssue | null> {
+    const rows = await this.db.query<IngestionIssue>({
+      text: `select
+               id,
+               tenant_id as "tenantId",
+               bom_id as "bomId",
+               part_number as "partNumber",
+               code,
+               message,
+               status,
+               created_at as "createdAt",
+               updated_at as "updatedAt"
+             from ingestion_issues
+             where id = $1`,
+      values: [issueId]
+    });
+    return rows[0] ?? null;
+  }
+
   async resolveIssue(issueId: UUID): Promise<void> {
     await this.db.query({
       text: `update ingestion_issues set status = 'RESOLVED', updated_at = now() where id = $1`,
       values: [issueId]
     });
+  }
+
+  async hasSupplierMapping(tenantId: TenantID, partNumber: string): Promise<boolean> {
+    const rows = await this.db.query<{ exists: boolean }>({
+      text: `select exists(
+               select 1
+               from component_suppliers
+               where tenant_id = $1
+                 and part_number = $2
+             ) as exists`,
+      values: [tenantId, partNumber]
+    });
+    return rows[0]?.exists ?? false;
+  }
+
+  async getComponentIngestionSnapshot(
+    tenantId: TenantID,
+    bomId: UUID,
+    partNumber: string
+  ): Promise<{ exists: boolean; hasWeight: boolean }> {
+    const rows = await this.db.query<{ exists: boolean; hasWeight: boolean }>({
+      text: `select
+               count(*) > 0 as exists,
+               coalesce(bool_or(bc.normalized_weight_mg is not null), false) as "hasWeight"
+             from bom_components bc
+             where bc.tenant_id = $1
+               and bc.bom_id = $2
+               and bc.part_number = $3`,
+      values: [tenantId, bomId, partNumber]
+    });
+    const snapshot = rows[0];
+    return {
+      exists: snapshot?.exists ?? false,
+      hasWeight: snapshot?.hasWeight ?? false
+    };
+  }
+
+  async hasCleanCertificateData(tenantId: TenantID, partNumber: string): Promise<boolean> {
+    const rows = await this.db.query<{ ok: boolean }>({
+      text: `select exists(
+               select 1
+               from certificates c
+               where c.tenant_id = $1
+                 and c.part_number = $2
+                 and exists (
+                   select 1
+                   from certificate_findings cf
+                   where cf.certificate_id = c.id
+                     and cf.data_quality not in ('VALUE_MISSING','UNIT_MISSING')
+                 )
+                 and not exists (
+                   select 1
+                   from certificate_findings cf
+                   where cf.certificate_id = c.id
+                     and cf.data_quality in ('VALUE_MISSING','UNIT_MISSING')
+                 )
+             ) as ok`,
+      values: [tenantId, partNumber]
+    });
+    return rows[0]?.ok ?? false;
   }
 
   async logWorkflowEvent(tenantId: TenantID, workflow: WorkflowEventType, payload: unknown) {

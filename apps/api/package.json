@@ -9,7 +9,7 @@
     "dev": "pnpm run build && node dist/main.js",
     "build": "tsc -b",
     "lint": "eslint \"src/**/*.ts\"",
-    "test": "echo 'TODO: add tests' && exit 0"
+    "test": "vitest run"
   },
   "dependencies": {
     "@certivo/compliance": "workspace:*",
@@ -28,6 +28,8 @@
     "prom-client": "^15.1.3"
   },
   "devDependencies": {
-    "@types/qs": "^6.14.0"
+    "@types/qs": "^6.14.0",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.1.4"
   }
 }

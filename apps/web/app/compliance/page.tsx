@@ -9,6 +9,7 @@ import { IngestionIssuesPanel } from '@/components/compliance/ingestion-issues-p
 import { RoleGate } from '@/components/rbac/role-gate';
 import { RoleSwitcher } from '@/components/rbac/role-switcher';
 import { useState } from 'react';
+import { SupplierManagementPanel } from '@/components/compliance/supplier-management-panel';
 
 export default function CompliancePage() {
   const [activeBomId, setActiveBomId] = useState<string | null>(null);
@@ -78,6 +79,18 @@ export default function CompliancePage() {
           <MergedBomView bomId={activeBomId} refreshKey={refreshKey} />
         </SectionCard>
       )}
+
+      {/* Supplier Management */}
+      <SectionCard
+        title="Supplier Management"
+        description="Configure suppliers and tie BOM parts to owners so Architecture.md §6 `component_suppliers` stays in sync with compliance ingest."
+      >
+        <SupplierManagementPanel
+          bomId={activeBomId}
+          refreshKey={refreshKey}
+          onAssignmentsApplied={() => setRefreshKey((prev) => prev + 1)}
+        />
+      </SectionCard>
 
       {/* Ingestion Issues - Analyst/Admin only */}
       <RoleGate allow={['analyst', 'admin']} fallback={<LockedIssuesCard />}>

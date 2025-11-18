@@ -718,12 +718,28 @@ export class DashboardService {
   }
 
   private async buildImpactPreview(tenantId: TenantID, bomId?: UUID): Promise<ImpactPredictResponse> {
-    return this.riskService.predictImpact({
-      tenantId,
-      regulationCode: this.defaultImpactRegulation,
-      limitVector: [{ substance: this.defaultImpactRegulation, limitPpm: this.defaultImpactLimitPpm }],
-      bomId
-    });
+    try {
+      return await this.riskService.predictImpact({
+        tenantId,
+        regulationCode: this.defaultImpactRegulation,
+        limitVector: [{ substance: this.defaultImpactRegulation, limitPpm: this.defaultImpactLimitPpm }],
+        bomId
+      });
+    } catch (error) {
+      const fallbackLimit = this.defaultImpactLimitPpm;
+      return {
+        regulation: this.defaultImpactRegulation,
+        oldLimitPpm: fallbackLimit,
+        newLimitPpm: fallbackLimit,
+        summary: { affectedParts: 0, affectedSuppliers: 0, affectedAssemblies: 0 },
+        deltas: [],
+        supplierRollups: [],
+        assemblyRollups: [],
+        vector: [],
+        baselineLimits: [],
+        expiresAtIso: null
+      };
+    }
   }
 }
 

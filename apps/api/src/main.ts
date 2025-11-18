@@ -15,18 +15,21 @@ import {
   certificateUploadSchema,
   documentUploadSchema,
   impactPredictSchema,
+  supplierAssignmentSchema,
+  supplierCreateSchema,
   supplierRequestSchema,
   uuidSchema,
   ragDocumentIngestSchema,
   aiChatSchema,
   validateWithSchema,
-  RequestValidationError
+  RequestValidationError,
+  productCreateSchema
 } from '@certivo/gateway';
-import type { BomUploadRequest, CertificateUploadRequest } from '@certivo/compliance';
+import type { BomUploadRequest, CertificateUploadRequest, CreateProductRequest } from '@certivo/compliance';
 import type { DocumentIngestRequest, SearchFilters } from '@certivo/search-rag';
 import type { DocumentController, UploadRequest } from '@certivo/file-document';
 import type { ImpactPredictRequest } from '@certivo/risk-impact';
-import type { SupplierRequestInput } from '@certivo/supplier';
+import type { SupplierAssignmentInput, SupplierCreateInput, SupplierRequestInput } from '@certivo/supplier';
 import type { AiParseDocumentRequest, AiRiskSummaryRequest, AiSupplierEmailRequest } from '@certivo/cora';
 import {
   createTemporalWorkflowClient,
@@ -161,7 +164,7 @@ export async function startApiServer(): Promise<void> {
   process.on('SIGTERM', shutdown);
 }
 
-interface BuildAppOptions {
+export interface BuildAppOptions {
   controller: ApiController;
   documentController: DocumentController;
   db: DatabaseClient;
@@ -178,7 +181,7 @@ interface AiChatHttpRequest {
   filters?: SearchFilters;
 }
 
-function buildApp(options: BuildAppOptions): Express {
+export function buildApp(options: BuildAppOptions): Express {
   const { controller, documentController, db, logger, metrics, jwtVerifier } = options;
   const app = express();
   app.use(express.json({ limit: '10mb' }));
@@ -242,6 +245,17 @@ function buildApp(options: BuildAppOptions): Express {
   app.use(tenantContextMiddleware);
 
   app.post(
+    '/products',
+    route('POST /products', async (req, res) => {
+      const httpReq = buildHttpRequest<CreateProductRequest>(req, {
+        bodyOverrides: { tenantId: req.tenantId }
+      });
+      httpReq.body = validateWithSchema(productCreateSchema, httpReq.body);
+      await controller.postProduct(httpReq, createHttpResponse(res));
+    })
+  );
+
+  app.post(
     '/bom/upload',
     route('POST /bom/upload', async (req, res) => {
       const httpReq = buildHttpRequest<BomUploadRequest>(req, { bodyOverrides: { tenantId: req.tenantId } });
@@ -256,6 +270,48 @@ function buildApp(options: BuildAppOptions): Express {
       const httpReq = buildHttpRequest<CertificateUploadRequest>(req, { bodyOverrides: { tenantId: req.tenantId } });
       httpReq.body = validateWithSchema(certificateUploadSchema, httpReq.body);
       await controller.postCertificateUpload(httpReq, createHttpResponse(res));
+    })
+  );
+
+  app.get(
+    '/suppliers',
+    route('GET /suppliers', async (req, res) => {
+      const httpReq = buildHttpRequest<unknown, Record<string, string>, { limit?: string; search?: string }>(req);
+      await controller.getSuppliers(httpReq, createHttpResponse(res));
+    })
+  );
+
+  app.post(
+    '/suppliers',
+    route('POST /suppliers', async (req, res) => {
+      const httpReq = buildHttpRequest<SupplierCreateInput>(req, {
+        bodyOverrides: { tenantId: req.tenantId, createdBy: req.user?.userId }
+      });
+      httpReq.body = validateWithSchema(supplierCreateSchema, httpReq.body);
+      await controller.postSupplier(httpReq, createHttpResponse(res));
+    })
+  );
+
+  app.post(
+    '/suppliers/assignments',
+    route('POST /suppliers/assignments', async (req, res) => {
+      const httpReq = buildHttpRequest<SupplierAssignmentInput>(req, {
+        bodyOverrides: { tenantId: req.tenantId, actorUserId: req.user?.userId }
+      });
+      httpReq.body = validateWithSchema(supplierAssignmentSchema, httpReq.body);
+      await controller.postSupplierAssignment(httpReq, createHttpResponse(res));
+    })
+  );
+
+  app.get(
+    '/suppliers/unassigned-parts',
+    route('GET /suppliers/unassigned-parts', async (req, res) => {
+      if (!req.query.bomId) {
+        res.status(400).json({ error: 'bomId is required' });
+        return;
+      }
+      const httpReq = buildHttpRequest<unknown, Record<string, string>, { bomId: string; limit?: string }>(req);
+      await controller.getUnassignedParts(httpReq, createHttpResponse(res));
     })
   );
 
