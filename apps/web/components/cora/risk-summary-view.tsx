@@ -1,11 +1,15 @@
 import type { CoraRiskSummary } from '@/lib/types/cora';
 
+type KnownStatKey = 'over_limit_parts' | 'missing_parts' | 'expired_certs' | 'upcoming_expirations';
+
 export function RiskSummaryView({ summary }: { summary: CoraRiskSummary }) {
   const severity = deriveSeverity(summary.execSummary);
   const summaryParagraphs = splitParagraphs(summary.summary);
   const statConfig = getStatConfig();
-  const renderedKeys = new Set(statConfig.map((item) => item.key));
-  const extraStats = Object.entries(summary.stats ?? {}).filter(([key]) => !renderedKeys.has(key));
+  const renderedKeys = new Set<KnownStatKey>(statConfig.map((item) => item.key));
+  const extraStats = Object.entries(summary.stats ?? {}).filter(
+    ([key]) => !renderedKeys.has(key as KnownStatKey)
+  );
 
   return (
     <div className="space-y-4">
@@ -38,7 +42,7 @@ export function RiskSummaryView({ summary }: { summary: CoraRiskSummary }) {
             <div key={item.key} className={`rounded-2xl border ${item.border} bg-slate-950/40 p-4 shadow-inner`}>
               <p className={`text-xs font-semibold uppercase tracking-wide ${item.accent}`}>{item.label}</p>
               <p className="mt-2 text-3xl font-semibold text-white">
-                {summary.stats?.[item.key] != null ? summary.stats[item.key].toLocaleString() : '—'}
+                {formatStatValue(summary.stats?.[item.key])}
               </p>
               <p className="mt-1 text-xs text-slate-400">{item.helper}</p>
             </div>
@@ -126,7 +130,13 @@ function splitParagraphs(summary: string) {
     .filter(Boolean);
 }
 
-function getStatConfig() {
+function getStatConfig(): Array<{
+  key: KnownStatKey;
+  label: string;
+  helper: string;
+  accent: string;
+  border: string;
+}> {
   return [
     {
       key: 'over_limit_parts',
@@ -170,4 +180,11 @@ function formatReason(reason: 'MISSING' | 'EXPIRED' | 'OVER_LIMIT') {
     default:
       return reason;
   }
+}
+
+function formatStatValue(value: number | undefined): string {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value.toLocaleString();
+  }
+  return '—';
 }
