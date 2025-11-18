@@ -100,12 +100,14 @@ This platform is built as a **modular monolith**—a single deployable applicati
 
 ### 1. Start Infrastructure
 
+You can still start Postgres/Redis manually:
+
 ```bash
 cd infra/docker
 docker compose up -d
 ```
 
-This starts PostgreSQL, Redis, MinIO (S3-compatible storage), and Temporal.
+However, the `pnpm dev` helper will now automatically invoke this compose file when your `DATABASE_URL` points to `localhost` and Postgres isn’t reachable, so you can generally skip this step unless you prefer managing containers yourself.
 
 ### 2. Set Up the Database
 
@@ -145,6 +147,8 @@ This launches:
 - Express API (`@certivo/api`) on port 4000
 - Next.js dashboard (`@certivo/web`) on port 3000
 - CORA FastAPI sidecar (`apps/cora`) on port 8000
+
+If Postgres or Redis aren’t up yet, the script will boot `infra/docker/docker-compose.yml` for you. It also checks `TEMPORAL_ADDRESS` and runs `temporal server start-dev` automatically when pointed at `localhost` so the Jobs & Workflow module described in Architecture.md §1 is always available during development.
 
 ### 6. Test the System
 
