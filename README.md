@@ -160,6 +160,8 @@ If you prefer to run the entire Architecture.md §1 stack inside containers (API
 
 This script loads `.dev.env`, provides the same default secrets as `pnpm dev`, and then runs `docker compose -f docker-compose.production.yml up -d --build`, giving you a production-like deployment without leaving your host environment running Node/Python processes.
 
+**Important:** Make sure `CERTIVO_API_URL` is commented out in `.dev.env` when using Docker. The containers communicate using the service name `http://api:4000` instead of `localhost`.
+
 #### First-Time Setup (Docker)
 
 After starting the containers for the first time, initialize the database:
