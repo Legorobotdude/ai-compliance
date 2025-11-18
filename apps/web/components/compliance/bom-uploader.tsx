@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { uploadDocument } from '@/lib/api/documents';
 
 interface BomUploaderProps {
   onUploadComplete?: (bomId: string) => void;
@@ -48,11 +49,11 @@ export function BomUploader({ onUploadComplete }: BomUploaderProps) {
       let payload: Record<string, unknown>;
 
       if (mode === 'file' && file) {
-        // Read file content
-        const content = await file.text();
+        const [content, uploadedDocument] = await Promise.all([file.text(), uploadDocument(file)]);
         payload = {
           productId,
           uploadedBy: DEFAULT_UPLOADER_ID,
+          sourceDocumentId: uploadedDocument.id,
           document: {
             filename: file.name,
             mimeType: file.type || 'text/csv',

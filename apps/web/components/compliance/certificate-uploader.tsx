@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { uploadDocument } from '@/lib/api/documents';
 
 interface CertificateUploaderProps {
   onUploadComplete?: () => void;
@@ -72,8 +73,8 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
         throw new Error('Select a supplier before uploading certificates');
       }
       if (mode === 'file' && file) {
+        const [uploadedDocument, content] = await Promise.all([uploadDocument(file), file.text()]);
         // For file mode, we'll parse the content and structure it
-        const content = await file.text();
 
         // Simple CSV parsing for demo (assumes header row)
         const lines = content.trim().split('\n');
@@ -96,6 +97,7 @@ export function CertificateUploader({ onUploadComplete }: CertificateUploaderPro
             declarationDate: row.declarationDate || row.declaration_date || null,
             validUntil: row.validUntil || row.valid_until || null,
             thresholdPpm: row.thresholdPpm ? parseFloat(row.thresholdPpm) : null,
+            sourceDocumentId: uploadedDocument.id,
             findings: row.substance ? [{
               substanceName: row.substance || row.substance_name,
               concentrationValue: row.concentration ? parseFloat(row.concentration) : null,
