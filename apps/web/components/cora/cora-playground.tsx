@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 
-import { SectionCard } from "@/components/ui/section-card";
+import { RiskSummaryView } from "@/components/cora/risk-summary-view";
 import { LabActionPanel, LabActionFeedback, postJson } from "@/components/cora/cora-utils";
+import { SectionCard } from "@/components/ui/section-card";
 import { SAMPLE_DOCUMENT_IDS, SAMPLE_SUPPLIER_IDS } from "@/lib/testing/sample-payloads";
+import type { CoraRiskSummary } from "@/lib/types/cora";
 
 type CoraPlaygroundProps = {
   defaultBomId: string;
@@ -18,6 +20,26 @@ export function CoraPlayground({
   defaultSupplierId
 }: CoraPlaygroundProps) {
   const supplierFallback = defaultSupplierId ?? SAMPLE_SUPPLIER_IDS.zentech;
+  const [riskSummaryResult, setRiskSummaryResult] = useState<CoraRiskSummary | null>(null);
+  const [riskSummaryError, setRiskSummaryError] = useState<string | null>(null);
+  const [riskSummaryLoading, setRiskSummaryLoading] = useState(false);
+
+  const handleRiskSummaryStart = () => {
+    setRiskSummaryLoading(true);
+    setRiskSummaryError(null);
+  };
+
+  const handleRiskSummarySuccess = (payload: CoraRiskSummary) => {
+    setRiskSummaryLoading(false);
+    setRiskSummaryResult(payload);
+  };
+
+  const handleRiskSummaryError = (message: string) => {
+    setRiskSummaryLoading(false);
+    setRiskSummaryResult(null);
+    setRiskSummaryError(message);
+  };
+
   return (
     <SectionCard
       title="CORA Playground"
@@ -40,9 +62,18 @@ export function CoraPlayground({
           title="Generate risk summary"
           description="Create AI-generated executive risk summary for a BOM or product."
         >
-          <RiskSummaryForm defaultBomId={defaultBomId} defaultProductId={defaultProductId} />
+          <RiskSummaryForm
+            defaultBomId={defaultBomId}
+            defaultProductId={defaultProductId}
+            loading={riskSummaryLoading}
+            onStart={handleRiskSummaryStart}
+            onSuccess={handleRiskSummarySuccess}
+            onError={handleRiskSummaryError}
+          />
         </LabActionPanel>
       </div>
+
+      <RiskSummaryResultPanel loading={riskSummaryLoading} error={riskSummaryError} summary={riskSummaryResult} />
     </SectionCard>
   );
 }
@@ -178,52 +209,63 @@ function SupplierEmailForm({ defaultBomId, defaultSupplierId }: { defaultBomId: 
   );
 }
 
-function RiskSummaryForm({ defaultBomId, defaultProductId }: { defaultBomId: string; defaultProductId: string }) {
+type RiskSummaryFormProps = {
+  defaultBomId: string;
+  defaultProductId: string;
+  loading: boolean;
+  onStart: () => void;
+  onSuccess: (payload: CoraRiskSummary) => void;
+  onError: (message: string) => void;
+};
+
+function RiskSummaryForm({
+  defaultBomId,
+  defaultProductId,
+  loading,
+  onStart,
+  onSuccess,
+  onError
+}: RiskSummaryFormProps) {
   const [bomId, setBomId] = useState(defaultBomId);
   const [productId, setProductId] = useState(defaultProductId);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setLoading(true);
-    setResult(null);
-    setError(null);
+    onStart();
     try {
       if (!bomId && !productId) {
         throw new Error("Provide a bomId or productId");
       }
-      const response = await postJson("/api/ai/risk-summary", {
+      const response = (await postJson("/api/ai/risk-summary", {
         bomId: bomId || undefined,
         productId: productId || undefined
-      });
-      setResult(JSON.stringify(response, null, 2));
+      })) as CoraRiskSummary;
+      onSuccess(response);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to build risk summary");
-    } finally {
-      setLoading(false);
+      onError(err instanceof Error ? err.message : "Failed to build risk summary");
     }
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 text-sm">
-      <div>
-        <label className="mb-1 block text-slate-300">BOM id</label>
-        <input
-          className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 focus:border-brand-400 focus:outline-none"
-          value={bomId}
-          onChange={(event) => setBomId(event.currentTarget.value)}
-          placeholder="Leave empty to fall back to product scope"
-        />
-      </div>
-      <div>
-        <label className="mb-1 block text-slate-300">Product id</label>
-        <input
-          className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 focus:border-brand-400 focus:outline-none"
-          value={productId}
-          onChange={(event) => setProductId(event.currentTarget.value)}
-        />
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-slate-300">BOM id</label>
+          <input
+            className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 focus:border-brand-400 focus:outline-none"
+            value={bomId}
+            onChange={(event) => setBomId(event.currentTarget.value)}
+            placeholder="Leave empty to fall back to product scope"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-slate-300">Product id</label>
+          <input
+            className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 focus:border-brand-400 focus:outline-none"
+            value={productId}
+            onChange={(event) => setProductId(event.currentTarget.value)}
+          />
+        </div>
       </div>
       <button
         type="submit"
@@ -232,7 +274,44 @@ function RiskSummaryForm({ defaultBomId, defaultProductId }: { defaultBomId: str
       >
         {loading ? "Summarizing…" : "Summarize risk"}
       </button>
-      <LabActionFeedback result={result} error={error} />
+      <p className="text-xs text-slate-500">Calls CORA's /ai/risk-summary endpoint using Architecture §4 prompt rules.</p>
     </form>
+  );
+}
+
+function RiskSummaryResultPanel({
+  loading,
+  summary,
+  error
+}: {
+  loading: boolean;
+  summary: CoraRiskSummary | null;
+  error: string | null;
+}) {
+  return (
+    <div className="mt-6 rounded-3xl border border-slate-800/80 bg-slate-950/30 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-white">Latest CORA risk summary</p>
+          <p className="text-xs text-slate-400">Rendered as a dedicated report card using Architecture §4 prompts.</p>
+        </div>
+        <div className="text-xs text-slate-400">
+          {loading ? "Crunching snapshots…" : summary ? "Up to date" : "Awaiting request"}
+        </div>
+      </div>
+      {error && (
+        <p className="mt-3 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{error}</p>
+      )}
+      {!error && summary && (
+        <div className="mt-4">
+          <RiskSummaryView summary={summary} />
+        </div>
+      )}
+      {!error && !summary && !loading && (
+        <p className="mt-3 text-xs text-slate-400">
+          Submit a BOM or product above to generate an executive-ready report powered by CORA's /ai/risk-summary endpoint.
+        </p>
+      )}
+    </div>
   );
 }

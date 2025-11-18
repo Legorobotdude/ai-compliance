@@ -2,19 +2,29 @@ import Link from "next/link";
 
 import { BomExplorer } from "@/components/dashboard/bom-explorer";
 import { SupplierScorecards } from "@/components/dashboard/supplier-scorecards";
-import { RiskVisualization } from "@/components/dashboard/risk-visualization";
 import { ImpactSimulator } from "@/components/dashboard/impact-simulator";
 import { AuditLogFeed } from "@/components/dashboard/audit-log-feed";
 import { IngestionOpsCenter } from "@/components/dashboard/ingestion-ops-center";
 import { SlaMonitor } from "@/components/dashboard/sla-monitor";
+import { RiskVisualization } from "@/components/dashboard/risk-visualization";
+import { RiskSummaryCard } from "@/components/dashboard/risk-summary-card";
 import { RoleGate } from "@/components/rbac/role-gate";
 import { RoleSwitcher } from "@/components/rbac/role-switcher";
 import { fetchDashboardSnapshot } from "@/lib/api/dashboard";
+import { fetchCoraRiskSummary } from "@/lib/api/cora";
+import { SectionCard } from "@/components/ui/section-card";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const snapshot = await fetchDashboardSnapshot();
+  let coraRiskSummary = null;
+  let coraRiskSummaryError: string | null = null;
+  try {
+    coraRiskSummary = await fetchCoraRiskSummary({ bomId: snapshot.bom.id, productId: snapshot.bom.productId });
+  } catch (err) {
+    coraRiskSummaryError = err instanceof Error ? err.message : "Unable to load CORA risk summary";
+  }
   const supplierOptions = snapshot.suppliers.map((supplier) => ({
     id: supplier.supplierId,
     name: supplier.name
@@ -82,6 +92,15 @@ export default async function DashboardPage() {
 
       <BomExplorer rows={snapshot.bom.items} suppliers={snapshot.suppliers} bomId={snapshot.bom.id} />
       <SupplierScorecards suppliers={snapshot.suppliers} bomId={snapshot.bom.id} />
+      {coraRiskSummary ? (
+        <RiskSummaryCard summary={coraRiskSummary} />
+      ) : (
+        <SectionCard title="AI risk summary" description="CORA's /ai/risk-summary endpoint">
+          <p className="text-sm text-slate-400">
+            {coraRiskSummaryError ?? "Risk summary not available. Try again after refreshing."}
+          </p>
+        </SectionCard>
+      )}
       <RiskVisualization risk={snapshot.risk} />
       <ImpactSimulator
         bomId={snapshot.bom.id}
