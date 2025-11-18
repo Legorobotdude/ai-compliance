@@ -7,12 +7,56 @@ import { RiskDataFreshnessPanel } from "@/components/risk-impact/risk-data-fresh
 import { ScenarioHistoryPanel } from "@/components/risk-impact/scenario-history-panel";
 import { SupplierExposureMatrix } from "@/components/risk-impact/supplier-exposure-matrix";
 import { SectionCard } from "@/components/ui/section-card";
+import { DataEmptyState } from "@/components/dashboard/data-empty-state";
 import { fetchDashboardSnapshot } from "@/lib/api/dashboard";
 
 export const dynamic = "force-dynamic";
 
 export default async function RiskImpactShowcasePage() {
   const snapshot = await fetchDashboardSnapshot();
+  const hasBomData = snapshot.bom.items.length > 0;
+
+  if (!hasBomData) {
+    return (
+      <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-10">
+        <header className="flex flex-col gap-4 rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900/60 to-slate-900/20 p-8 text-white shadow-card lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-sm uppercase tracking-widest text-brand-300">Risk &amp; Impact Analysis</p>
+            <h1 className="mt-2 text-3xl font-semibold">Risk &amp; Impact Assessment</h1>
+            <p className="mt-2 text-slate-300">
+              Simulations and analytics need BOM coverage before limits, trends, and supplier exposure can hydrate.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/"
+              className="rounded-full border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-400 hover:text-brand-200"
+            >
+              ← Back to dashboard
+            </Link>
+          </div>
+        </header>
+        <DataEmptyState
+          title="Impact simulator is waiting on data"
+          description="Upload a BOM (or seed sample data) so the PFAS simulator and risk analytics can execute."
+          message="No BOM rows found to simulate against."
+          actions={
+            <Link
+              href="/compliance"
+              className="rounded-lg bg-brand-500 px-4 py-2 font-semibold text-white hover:bg-brand-600"
+            >
+              Upload BOM
+            </Link>
+          }
+        >
+          <p className="text-xs">
+            Once a BOM is available, this page pulls live vectors from <code className="rounded bg-slate-900 px-1">/dashboard/snapshot</code>
+            and lets you test <code className="rounded bg-slate-900 px-1">/api/impact</code> locally.
+          </p>
+        </DataEmptyState>
+      </main>
+    );
+  }
   const supplierOptions = snapshot.suppliers.map((supplier) => ({
     id: supplier.supplierId,
     name: supplier.name
@@ -104,4 +148,3 @@ function TestingPlaybookCard() {
     </SectionCard>
   );
 }
-

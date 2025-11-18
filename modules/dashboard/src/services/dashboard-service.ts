@@ -13,6 +13,8 @@ import type {
 } from '../dtos/dashboard-dtos';
 import { DashboardRepository } from '../repositories/dashboard-repository';
 
+const NIL_UUID: UUID = '00000000-0000-0000-0000-000000000000' as UUID;
+
 export interface DashboardServiceOptions {
   supplierLimit?: number;
   auditLogLimit?: number;
@@ -54,7 +56,7 @@ export class DashboardService {
         : await this.repository.findLatestBom(tenantId);
 
     if (!bomMeta) {
-      throw new Error('No BOMs found for tenant; ingest data before requesting dashboard snapshot.');
+      return this.buildEmptySnapshot(tenantId);
     }
 
     const bomId = params.bomId ?? bomMeta.id;
@@ -135,6 +137,143 @@ export class DashboardService {
       ingestionIssues: opsIssues,
       slaLeaderboard,
       riskDataFreshness,
+      workflowJobs
+    };
+  }
+
+  private async buildEmptySnapshot(tenantId: TenantID): Promise<DashboardSnapshotDto> {
+    const [
+      suppliers,
+      requestDurations,
+      auditLogs,
+      issues,
+      slaAggregates,
+      workflowEvents,
+      risk,
+      impactHistory,
+      riskDataFreshness,
+      regulationOptions
+    ] = await Promise.all([
+      this.repository.listSuppliers(tenantId, this.supplierLimit),
+      this.repository.listSupplierRequestDurations(tenantId),
+      this.repository.listAuditLogs(tenantId, this.auditLogLimit),
+      this.repository.listIngestionIssues(tenantId, this.issueLimit),
+      this.repository.listSlaAggregates(tenantId),
+      this.repository.listWorkflowEvents(tenantId, this.workflowEventLimit),
+      this.riskService.getRiskAnalyticsSnapshot({
+        tenantId,
+        frameworkLimit: 4,
+        supplierExposureLimit: 6,
+        gapLimit: 4,
+        trendPoints: 6
+      }),
+      this.riskService.listRecentImpactScenarios(tenantId, 5),
+      this.riskService.getRiskDataFreshness(tenantId),
+      this.riskService.listRegulationOptions(6)
+    ]);
+
+    const supplierSnapshots = this.mapSuppliers(suppliers, requestDurations);
+    const auditEntries = auditLogs.map((log) => this.mapAuditLogEntry(log));
+    const opsIssues = issues.map<OpsIssueDto>((issue) => ({
+      id: issue.id,
+      bomId: issue.bomId,
+      assemblyId: issue.assemblyId,
+      partNumber: issue.partNumber,
+      code: issue.code,
+      severity: mapIssueSeverity(issue.code, issue.status),
+      message: issue.message,
+      createdAt: issue.createdAt
+    }));
+    const slaLeaderboard = slaAggregates.map<SlaLeaderboardEntryDto>((row) => {
+      const avgDaysValue = row.avgDays == null ? 0 : Number(row.avgDays);
+      const slaTargetValue = row.slaTargetDays == null ? undefined : Number(row.slaTargetDays);
+      return {
+        supplierId: row.supplierId,
+        supplierName: row.supplierName,
+        avgDays: roundNumber(avgDaysValue),
+        slaTargetDays: Math.max(1, Math.round(slaTargetValue ?? 5)),
+        openWorkflows: row.openWorkflows,
+        escalations: row.escalations
+      };
+    });
+    const workflowJobs = this.buildWorkflowJobs(workflowEvents);
+    const regulationCatalog = regulationOptions.length
+      ? regulationOptions
+      : [
+          {
+            code: this.defaultImpactRegulation,
+            name: this.defaultImpactRegulation,
+            limits: [
+              {
+                substance: this.defaultImpactRegulation,
+                limitPpm: this.defaultImpactLimitPpm
+              }
+            ]
+          }
+        ];
+    const defaultRegulation =
+      regulationCatalog.find((reg) => reg.code === this.defaultImpactRegulation)?.code ??
+      regulationCatalog[0]?.code ??
+      this.defaultImpactRegulation;
+    const baselineLimits =
+      regulationCatalog.find((reg) => reg.code === defaultRegulation)?.limits ??
+      regulationCatalog[0]?.limits ??
+      [
+        {
+          substance: this.defaultImpactRegulation,
+          limitPpm: this.defaultImpactLimitPpm
+        }
+      ];
+    const impactVector = baselineLimits.map((limit) => ({
+      substance: limit.substance,
+      baselineLimitPpm: limit.limitPpm,
+      limitPpm: limit.limitPpm
+    }));
+    const impact: ImpactPredictResponse = {
+      regulation: defaultRegulation,
+      oldLimitPpm: baselineLimits[0]?.limitPpm ?? this.defaultImpactLimitPpm,
+      newLimitPpm: baselineLimits[0]?.limitPpm ?? this.defaultImpactLimitPpm,
+      summary: {
+        affectedParts: 0,
+        affectedSuppliers: 0,
+        affectedAssemblies: 0
+      },
+      deltas: [],
+      supplierRollups: [],
+      assemblyRollups: [],
+      vector: impactVector,
+      baselineLimits,
+      expiresAtIso: null
+    };
+
+    return {
+      tenantId,
+      bom: {
+        id: NIL_UUID,
+        productId: NIL_UUID,
+        externalId: 'NO_BOM',
+        productName: 'No BOM uploaded',
+        uploadedAt: new Date(0).toISOString(),
+        items: [],
+        statusCounts: {
+          COMPLIANT: 0,
+          MISSING: 0,
+          EXPIRED: 0,
+          OVER_LIMIT: 0
+        }
+      },
+      suppliers: supplierSnapshots,
+      risk,
+      impact,
+      impactHistory,
+      impactOptions: {
+        defaultRegulation,
+        regulations: regulationCatalog
+      },
+      riskDataFreshness,
+      auditLogs: auditEntries,
+      ingestionIssues: opsIssues,
+      slaLeaderboard,
       workflowJobs
     };
   }
@@ -578,7 +717,7 @@ export class DashboardService {
     });
   }
 
-  private async buildImpactPreview(tenantId: TenantID, bomId: UUID): Promise<ImpactPredictResponse> {
+  private async buildImpactPreview(tenantId: TenantID, bomId?: UUID): Promise<ImpactPredictResponse> {
     return this.riskService.predictImpact({
       tenantId,
       regulationCode: this.defaultImpactRegulation,

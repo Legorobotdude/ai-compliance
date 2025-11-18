@@ -47,14 +47,17 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
-# Create a temporary env file without CERTIVO_API_URL for Docker
-# This allows docker-compose to use its default 'http://api:4000'
-TEMP_ENV_FILE="${ROOT_DIR}/.docker.env.tmp"
+# Warn if CERTIVO_API_URL is set (should be commented out for Docker)
+if [[ -n "${CERTIVO_API_URL:-}" ]]; then
+  echo "⚠️  WARNING: CERTIVO_API_URL is set to '${CERTIVO_API_URL}'"
+  echo "⚠️  For Docker deployment, this should be commented out in .dev.env"
+  echo "⚠️  Docker containers should use the default 'http://api:4000' instead"
+  echo ""
+fi
+
+# Set up compose flags
 if [[ -f "${ENV_FILE}" ]]; then
-  grep -v '^CERTIVO_API_URL=' "${ENV_FILE}" > "${TEMP_ENV_FILE}" || true
-  echo "🔍 Filtered env file created at ${TEMP_ENV_FILE}"
-  echo "🔍 CERTIVO_API_URL in temp file: $(grep 'CERTIVO_API_URL' "${TEMP_ENV_FILE}" || echo 'NOT FOUND (correct!)')"
-  compose_flags=(-f "${COMPOSE_FILE}" --env-file "${TEMP_ENV_FILE}")
+  compose_flags=(-f "${COMPOSE_FILE}" --env-file "${ENV_FILE}")
 else
   compose_flags=(-f "${COMPOSE_FILE}")
 fi
@@ -78,9 +81,18 @@ echo "🚢 Building and starting the full Certivo stack via Docker Compose..."
   docker compose "${compose_flags[@]}" up -d --build
 )
 
-echo "✅ All services are starting. Use 'docker compose ${compose_flags[*]} logs -f' for live logs and 'docker compose ${compose_flags[*]} down' to stop them."
-
-# Clean up temporary env file
-if [[ -f "${TEMP_ENV_FILE}" ]]; then
-  rm -f "${TEMP_ENV_FILE}"
-fi
+echo ""
+echo "✅ All services are starting!"
+echo ""
+echo "📋 Common commands:"
+echo "  View logs:       docker compose -f ${COMPOSE_FILE} logs -f"
+echo "  View API logs:   docker compose -f ${COMPOSE_FILE} logs -f api"
+echo "  Stop services:   docker compose -f ${COMPOSE_FILE} down"
+echo "  Run migrations:  docker exec certivo-api node libs/db/scripts/run-migrations.mjs"
+echo "  Seed database:   docker exec certivo-api node libs/db/scripts/seed-sample-data.mjs"
+echo ""
+echo "🌐 Access points:"
+echo "  Web:  http://localhost:3000"
+echo "  API:  http://localhost:4000"
+echo "  CORA: http://localhost:8082"
+echo ""
