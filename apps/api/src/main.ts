@@ -30,7 +30,7 @@ import type { DocumentIngestRequest, SearchFilters } from '@certivo/search-rag';
 import type { DocumentController, UploadRequest } from '@certivo/file-document';
 import type { ImpactPredictRequest } from '@certivo/risk-impact';
 import type { SupplierAssignmentInput, SupplierCreateInput, SupplierRequestInput } from '@certivo/supplier';
-import type { AiParseDocumentRequest, AiRiskSummaryRequest, AiSupplierEmailRequest } from '@certivo/cora';
+import { CoraHttpError, type AiParseDocumentRequest, type AiRiskSummaryRequest, type AiSupplierEmailRequest } from '@certivo/cora';
 import {
   createTemporalWorkflowClient,
   type TemporalClientRuntime,
@@ -696,8 +696,11 @@ function createErrorHandler(logger: Logger) {
     log.error({ err }, 'unhandled error');
     const status =
       typeof err === 'object' && err && 'status' in err ? Number((err as { status: number }).status) : 500;
+    const coraMessage = status < 500 ? extractCoraErrorMessage(err) : undefined;
     const message =
-      status >= 500 ? 'Internal Server Error' : err instanceof Error ? err.message : 'Request failed';
+      status >= 500
+        ? 'Internal Server Error'
+        : coraMessage ?? (err instanceof Error ? err.message : 'Request failed');
     const details =
       typeof err === 'object' && err && 'details' in err ? (err as { details?: unknown }).details : undefined;
     const payload =
@@ -706,6 +709,27 @@ function createErrorHandler(logger: Logger) {
         : { error: message };
     res.status(status).json(payload);
   };
+}
+
+function extractCoraErrorMessage(err: unknown): string | undefined {
+  if (err instanceof CoraHttpError) {
+    const body = err.responseBody;
+    if (typeof body === 'string') {
+      return body;
+    }
+    if (body && typeof body === 'object') {
+      if ('error' in body && typeof (body as { error?: unknown }).error === 'string') {
+        return (body as { error: string }).error;
+      }
+      if ('detail' in body && typeof (body as { detail?: unknown }).detail === 'string') {
+        return (body as { detail: string }).detail;
+      }
+      if ('message' in body && typeof (body as { message?: unknown }).message === 'string') {
+        return (body as { message: string }).message;
+      }
+    }
+  }
+  return undefined;
 }
 
 void startApiServer();

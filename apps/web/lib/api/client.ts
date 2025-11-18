@@ -9,6 +9,17 @@ type ApiClientConfig = {
   token: string;
 };
 
+export class CertivoApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly body?: unknown
+  ) {
+    super(message);
+    this.name = 'CertivoApiError';
+  }
+}
+
 let cachedConfig: ApiClientConfig | null = null;
 
 function resolveConfig(): ApiClientConfig {
@@ -40,7 +51,7 @@ export async function certivoApiFetch<TResponse>(
   if (!response.ok) {
     const body = await safeJson(response);
     const message = parseErrorMessage(body) ?? `Certivo API request failed (${response.status})`;
-    throw new Error(message);
+    throw new CertivoApiError(message, response.status, body);
   }
   return (await response.json()) as TResponse;
 }
@@ -54,9 +65,15 @@ async function safeJson(response: Response): Promise<unknown | undefined> {
 }
 
 function parseErrorMessage(body: unknown): string | undefined {
-  if (body && typeof body === "object" && "error" in body) {
+  if (body && typeof body === 'object' && 'error' in body) {
     const value = (body as { error?: unknown }).error;
-    if (typeof value === "string") {
+    if (typeof value === 'string') {
+      return value;
+    }
+  }
+  if (body && typeof body === 'object' && 'detail' in body) {
+    const value = (body as { detail?: unknown }).detail;
+    if (typeof value === 'string') {
       return value;
     }
   }

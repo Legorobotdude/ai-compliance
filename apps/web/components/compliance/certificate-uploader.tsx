@@ -420,7 +420,8 @@ function parseCertificateCsv(
     const substance =
       getValue(values, normalizedHeaders, ['substance', 'substancename']) ??
       getValue(values, normalizedHeaders, ['chemical']);
-    const concentrationRaw = getValue(values, normalizedHeaders, ['concentration', 'value']);
+    const concentrationRawValue = getValue(values, normalizedHeaders, ['concentration', 'value']);
+    const concentrationRaw = normalizeOptionalText(concentrationRawValue);
     const concentrationUnit = (getValue(values, normalizedHeaders, ['unit', 'units']) as CertificateFindingPayload['concentrationUnit']) ?? undefined;
 
     const findings: CertificateFindingPayload[] =
@@ -433,7 +434,7 @@ function parseCertificateCsv(
                   ? Number.parseFloat(concentrationRaw)
                   : null,
               concentrationUnit,
-              concentrationRaw: concentrationRaw ?? null
+              concentrationRaw
             }
           ]
         : [];
@@ -494,11 +495,12 @@ function parseReachXml(
         return;
       }
 
-      const concentrationRaw =
+      const concentrationRawValue =
         substance.getAttribute('concentration')?.trim() ||
         substance.getAttribute('value')?.trim() ||
         substance.textContent?.trim() ||
         null;
+      const concentrationRaw = normalizeOptionalText(concentrationRawValue ?? undefined);
       const concentrationValue =
         concentrationRaw && !Number.isNaN(Number.parseFloat(concentrationRaw))
           ? Number.parseFloat(concentrationRaw)
@@ -552,7 +554,7 @@ async function parseCertificatePdf(
         substanceName: finding.substanceName,
         concentrationValue: finding.concentrationValue,
         concentrationUnit: finding.concentrationUnit ?? undefined,
-        concentrationRaw: finding.notes
+        concentrationRaw: normalizeOptionalText(finding.notes ?? undefined)
       }))
     }));
 
@@ -605,4 +607,12 @@ function getValue(
     }
   }
   return undefined;
+}
+
+function normalizeOptionalText(value?: string | null): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }

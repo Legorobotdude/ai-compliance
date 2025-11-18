@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { certivoApiFetch } from "@/lib/api/client";
+import { CertivoApiError, certivoApiFetch } from "@/lib/api/client";
 
 type AiSupplierEmailResponse = {
   supplierId: string;
@@ -19,7 +19,12 @@ type IncomingPayload = {
 };
 
 export async function POST(request: Request) {
-  const payload = (await request.json()) as IncomingPayload | null;
+  let payload: IncomingPayload | null = null;
+  try {
+    payload = (await request.json()) as IncomingPayload | null;
+  } catch {
+    return NextResponse.json({ error: "Request body is required" }, { status: 400 });
+  }
   if (
     !payload ||
     typeof payload.supplierId !== "string" ||
@@ -28,16 +33,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "supplierId and bomId are required" }, { status: 400 });
   }
 
-  const result = await certivoApiFetch<AiSupplierEmailResponse>("/ai/supplier-email", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      supplierId: payload.supplierId,
-      bomId: payload.bomId,
-      language: payload.language,
-      tone: payload.tone
-    })
-  });
+  try {
+    const result = await certivoApiFetch<AiSupplierEmailResponse>("/ai/supplier-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        supplierId: payload.supplierId,
+        bomId: payload.bomId,
+        language: payload.language,
+        tone: payload.tone
+      })
+    });
 
-  return NextResponse.json(result);
+    return NextResponse.json(result);
+  } catch (error) {
+    const status = error instanceof CertivoApiError ? error.status : 502;
+    const message = error instanceof Error ? error.message : "Failed to draft supplier email";
+    return NextResponse.json({ error: message }, { status });
+  }
 }
