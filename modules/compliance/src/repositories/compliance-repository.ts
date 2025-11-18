@@ -36,6 +36,22 @@ export class ComplianceRepository {
     return this.db.withTransaction((tx) => callback(new ComplianceRepository(tx)));
   }
 
+  async upsertProduct(payload: { tenantId: TenantID; productName: string; code: string }): Promise<{ id: UUID; code: string }> {
+    const [result] = await this.db.query<{ id: UUID; code: string }>({
+      text: `
+        insert into products (tenant_id, product_name, code)
+        values ($1,$2,$3)
+        on conflict (tenant_id, code) do update set product_name = excluded.product_name
+        returning id, code
+      `,
+      values: [payload.tenantId, payload.productName, payload.code]
+    });
+    if (!result) {
+      throw new Error('Failed to upsert product');
+    }
+    return result;
+  }
+
   async createBom(payload: PersistableBom): Promise<UUID> {
     return this.db.withTransaction(async (tx) => {
       const [result] = await tx.query<{ id: UUID }>({

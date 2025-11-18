@@ -10,6 +10,7 @@ import type {
   CertificateUploadRequest,
   CertificateUploadResponse
 } from '../dtos/certificate-dtos.js';
+import type { CreateProductRequest } from '../dtos/product-dtos.js';
 
 const uuid = () => z.string().uuid();
 const tenantId = () => z.string().min(1);
@@ -64,6 +65,22 @@ export const bomUploadRequestSchema = bomUploadRequestBaseSchema.superRefine((va
     });
   }
 }) satisfies z.ZodType<BomUploadRequest>;
+
+const productCodeSchema = () =>
+  z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-zA-Z0-9._-]+$/, 'Code may only include letters, numbers, dots, hyphens, or underscores');
+
+export const productCreateRequestSchema = z
+  .object({
+    tenantId: tenantId(),
+    productName: nonEmpty(),
+    code: productCodeSchema().optional(),
+    createdBy: uuid().optional()
+  })
+  .strict() satisfies z.ZodType<CreateProductRequest>;
 
 const ingestionIssueSchema = z
   .object({
@@ -211,4 +228,8 @@ export function parseCertificateUploadRequest(payload: unknown): CertificateUplo
 
 export function parseMergedViewRequest(payload: unknown): MergedViewRequest {
   return mergedViewRequestSchema.parse(payload);
+}
+
+export function parseProductCreateRequest(payload: unknown): CreateProductRequest {
+  return productCreateRequestSchema.parse(payload);
 }

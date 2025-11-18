@@ -1,10 +1,12 @@
 import type { BomUploadRequest, MergedViewRequest } from '../dtos/bom-dtos';
 import type { CertificateUploadRequest } from '../dtos/certificate-dtos';
+import type { CreateProductRequest } from '../dtos/product-dtos';
 import { ComplianceService } from '../services/compliance-service';
 import {
   parseBomUploadRequest,
   parseCertificateUploadRequest,
-  parseMergedViewRequest
+  parseMergedViewRequest,
+  parseProductCreateRequest
 } from '../validation/compliance-schemas.js';
 
 export class ComplianceController {
@@ -23,5 +25,10 @@ export class ComplianceController {
   async uploadCertificates(payload: CertificateUploadRequest) {
     const dto = parseCertificateUploadRequest(payload);
     return this.service.ingestCertificates(dto);
+  }
+
+  async createProduct(payload: CreateProductRequest) {
+    const dto = parseProductCreateRequest(payload);
+    return this.service.createProduct(dto);
   }
 }

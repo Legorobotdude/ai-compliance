@@ -1,6 +1,7 @@
 import type {
   BomUploadRequest,
   CertificateUploadRequest,
+  CreateProductRequest,
   MergedViewRequest
 } from '@certivo/compliance';
 import { ComplianceController } from '@certivo/compliance';
@@ -44,6 +45,11 @@ export class ApiController {
 
   async postBomUpload(req: HttpRequest<BomUploadRequest>, res: HttpResponse) {
     const result = await this.compliance.uploadBom(req.body);
+    res.status(201).json(result);
+  }
+
+  async postProduct(req: HttpRequest<CreateProductRequest>, res: HttpResponse) {
+    const result = await this.compliance.createProduct(req.body);
     res.status(201).json(result);
   }
 

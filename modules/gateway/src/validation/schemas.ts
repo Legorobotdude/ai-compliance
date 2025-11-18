@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { bomUploadRequestSchema, certificateUploadRequestSchema } from '@certivo/compliance';
+import {
+  bomUploadRequestSchema,
+  certificateUploadRequestSchema,
+  productCreateRequestSchema
+} from '@certivo/compliance';
 import type { ImpactPredictRequest } from '@certivo/risk-impact';
 import type { UploadRequest } from '@certivo/file-document';
 import type { SupplierRequestInput } from '@certivo/supplier';
@@ -13,6 +17,7 @@ export const uuidSchema = () => z.string().uuid();
 const uuid = uuidSchema;
 export const bomUploadSchema = bomUploadRequestSchema;
 export const certificateUploadSchema = certificateUploadRequestSchema;
+export const productCreateSchema = productCreateRequestSchema;
 const ragSourceType = () => z.enum(['DOCUMENT', 'REGULATION', 'NOTE']);
 
 export const supplierRequestSchema = z

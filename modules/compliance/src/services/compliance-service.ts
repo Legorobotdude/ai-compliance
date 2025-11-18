@@ -3,6 +3,7 @@ import type { TenantID, UUID } from '@certivo/lib-db';
 import type { DocumentService } from '@certivo/file-document';
 import type { Logger } from '@certivo/lib-logging';
 import { createLogger } from '@certivo/lib-logging';
+import { randomUUID } from 'node:crypto';
 import type {
   BomAssemblyInput,
   BomUploadRequest,
@@ -20,6 +21,7 @@ import type {
   PersistableCertificate,
   PersistableCertificateFinding
 } from '../dtos/certificate-dtos';
+import type { CreateProductRequest, CreateProductResponse } from '../dtos/product-dtos';
 import { ComplianceRepository } from '../repositories/compliance-repository';
 import { BomIngestionError } from '../errors.js';
 import { extractAssembliesFromRequest } from './bom-ingestion-parser.js';
@@ -200,6 +202,41 @@ export class ComplianceService {
     );
 
     return { items, issues };
+  }
+
+  async createProduct(request: CreateProductRequest): Promise<CreateProductResponse> {
+    const name = request.productName.trim();
+    const code = this.normalizeProductCode(request.code ?? request.productName);
+    const product = await this.repo.upsertProduct({
+      tenantId: request.tenantId,
+      productName: name,
+      code
+    });
+    await this.repo.recordAuditLog({
+      tenantId: request.tenantId,
+      actorUserId: request.createdBy ?? null,
+      action: 'PRODUCT_UPSERTED',
+      target: `product:${product.id}`,
+      payload: {
+        productName: name,
+        code: product.code
+      }
+    });
+    return { productId: product.id, code: product.code };
+  }
+
+  private normalizeProductCode(raw: string): string {
+    const candidate = raw
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9._-]+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '')
+      .slice(0, 64);
+    if (candidate.length > 0) {
+      return candidate;
+    }
+    return `PRODUCT-${randomUUID().slice(0, 8).toUpperCase()}`;
   }
 
   private buildPersistableBom(

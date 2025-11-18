@@ -19,6 +19,8 @@ interface BomUploadResponse {
 
 type UploadMode = 'file' | 'json';
 
+const DEFAULT_UPLOADER_ID = '45c6686f-886c-4eec-a378-fb8cfed7fcaf'; // Sample seed user id
+
 export function BomUploader({ onUploadComplete }: BomUploaderProps) {
   const [mode, setMode] = useState<UploadMode>('file');
   const [file, setFile] = useState<File | null>(null);
@@ -50,7 +52,7 @@ export function BomUploader({ onUploadComplete }: BomUploaderProps) {
         const content = await file.text();
         payload = {
           productId,
-          uploadedBy: '45c6686f-886c-e4ec-2378-fb8cfed7fcaf', // Default user from seed data
+          uploadedBy: DEFAULT_UPLOADER_ID,
           document: {
             filename: file.name,
             mimeType: file.type || 'text/csv',
@@ -63,7 +65,7 @@ export function BomUploader({ onUploadComplete }: BomUploaderProps) {
         const parsedJson = JSON.parse(jsonInput);
         payload = {
           productId,
-          uploadedBy: '45c6686f-886c-e4ec-2378-fb8cfed7fcaf', // Default user from seed data
+          uploadedBy: DEFAULT_UPLOADER_ID,
           ...parsedJson,
         };
       } else {
@@ -137,13 +139,13 @@ export function BomUploader({ onUploadComplete }: BomUploaderProps) {
         {/* Product ID */}
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-1">
-            Product ID *
+            Product ID or Name *
           </label>
           <input
             type="text"
             value={productId}
             onChange={(e) => setProductId(e.target.value)}
-            placeholder="e.g., PROD-001"
+            placeholder={'e.g., existing UUID or "Industrial Hub"'}
             className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md text-white placeholder-slate-400 focus:ring-2 focus:ring-brand-400 focus:border-transparent"
             required
           />

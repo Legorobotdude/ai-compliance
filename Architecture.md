@@ -86,6 +86,12 @@
 
 ## 3) API Surface (TypeScript DTOs, zod validation)
 
+**POST** `/products`
+
+* Body: `{ product_name: string; code?: string }` (tenant inferred from JWT). `code` defaults to a deterministic uppercase slug (letters/numbers/`._-`) and is capped at 64 chars.
+* Upserts into `products` (Architecture §2) and records an `AuditLog` entry with `PRODUCT_UPSERTED` so product creation stays traceable.
+* Frontend BOM tooling (Next.js uploader) first calls this route whenever a user types a non-UUID product identifier; the API returns `{product_id, code}` which is then passed to `/bom/upload`.
+
 **POST** `/bom/upload`
 
 * Multipart file or JSON. Accepts CSV/JSON (and ZIP of subdocs).
