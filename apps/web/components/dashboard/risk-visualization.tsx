@@ -1,6 +1,17 @@
 "use client";
 
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Bar, BarChart } from "recharts";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  Bar,
+  BarChart,
+  Cell
+} from "recharts";
 
 import type { RiskSummary } from "@/lib/types/dashboard";
 import { SectionCard } from "@/components/ui/section-card";
@@ -18,13 +29,14 @@ function getCoverageColor(percent: number): string {
 
 export function RiskVisualization({ risk }: RiskVisualizationProps) {
   // Sort frameworks by coverage (lowest first to highlight risks)
-  const frameworkData = risk.frameworks
+  const frameworkData = (risk.frameworks ?? [])
     .map((framework) => ({
       ...framework,
       percent: Math.round(framework.percent * 100),
       fill: getCoverageColor(framework.percent * 100)
     }))
     .sort((a, b) => a.percent - b.percent);
+  const hasFrameworkData = frameworkData.length > 0;
 
   const topGaps = risk.gaps;
 
@@ -111,30 +123,36 @@ export function RiskVisualization({ risk }: RiskVisualizationProps) {
             <p className="text-sm font-medium text-white">Framework Coverage</p>
             <p className="text-xs text-slate-400 mt-1">Sorted by coverage (lowest risk first)</p>
           </div>
-          <ResponsiveContainer width="100%" height={Math.max(200, frameworkData.length * 60)}>
-            <BarChart data={frameworkData} layout="vertical" margin={{ left: 20, right: 30 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
-              <XAxis type="number" domain={[0, 100]} stroke="#94a3b8" tick={{ fill: "#94a3b8" }} />
-              <YAxis
-                type="category"
-                dataKey="name"
-                stroke="#94a3b8"
-                tick={{ fill: "#94a3b8", fontSize: 12 }}
-                width={150}
-              />
-              <Tooltip
-                contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px" }}
-                itemStyle={{ color: "#ffffff" }}
-                labelStyle={{ color: "#ffffff" }}
-                formatter={(value: number) => `${value}%`}
-              />
-              <Bar dataKey="percent" radius={[0, 4, 4, 0]}>
-                {frameworkData.map((entry) => (
-                  <Bar key={entry.name} dataKey="percent" fill={entry.fill} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          {hasFrameworkData ? (
+            <ResponsiveContainer width="100%" height={Math.max(200, frameworkData.length * 60)}>
+              <BarChart data={frameworkData} layout="vertical" margin={{ left: 20, right: 30 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                <XAxis type="number" domain={[0, 100]} stroke="#94a3b8" tick={{ fill: "#94a3b8" }} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  stroke="#94a3b8"
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                  width={150}
+                />
+                <Tooltip
+                  contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px" }}
+                  itemStyle={{ color: "#ffffff" }}
+                  labelStyle={{ color: "#ffffff" }}
+                  formatter={(value: number) => `${value}%`}
+                />
+                <Bar dataKey="percent" radius={[0, 4, 4, 0]}>
+                  {frameworkData.map((entry) => (
+                    <Cell key={entry.code ?? entry.name} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-sm text-slate-500">
+              Framework coverage will populate after regulations from Architecture.md §5-§6 have data.
+            </p>
+          )}
           <div className="mt-3 flex items-center gap-4 text-xs text-slate-400">
             <div className="flex items-center gap-1.5">
               <div className="h-3 w-3 rounded bg-red-400" />

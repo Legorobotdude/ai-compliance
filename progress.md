@@ -105,6 +105,7 @@
 - Built the Temporal workflow runtime outlined in Architecture.md §1 (Jobs & Workflow module) and §211 (SupplierRequestWorkflow): added supplier + ingestion workflows, shared activities backed by `workflow_events`, and Temporal client/worker factories that own connection/task queue config.
 - Wired the Express API/SupplierService to the new workflow service so `/supplier/request` immediately schedules a `SupplierRequestWorkflow`, replaced the Noop runtime with the Temporal client helper, and added a worker entrypoint (`apps/worker/src/main.ts`) that boots the double-queue Temporal worker per Architecture.md guidance.
 - Implemented Architecture.md §7 observability requirements end-to-end: compliance BOM/certificate uploads now emit structured `audit_logs` rows and warn on ingestion issues, CORA supplier email drafts log latency + audit trails, and every supplier workflow status change writes to `audit_logs`, giving the dashboard Ops Center a feed of uploads, LLM responses, ingestion errors, and slow responders.
+- Fixed the Framework Coverage chart in the RiskVisualization block (Architecture.md §6) by swapping the incorrect nested `<Bar>` usage for Recharts `<Cell>` elements, ensuring each framework renders with the correct risk color and adding an empty-state hint when no regulation slices are available.
 
 - Restored real supplier scorecard metrics per Architecture.md §1 by aliasing suppliers columns in DashboardRepository.listSuppliers so compliance rates and average response times populate in the dashboard snapshot.
 

@@ -612,7 +612,7 @@ function parseReachXml(
   const missingSupplierParts: string[] = [];
 
   const certificates = parts
-    .map((part, index) => {
+    .map((part, index): CertificatePayload | null => {
       const partNumber = part.getElementsByTagName('PartNumber')[0]?.textContent?.trim();
       if (!partNumber) {
         throw new Error(`Part entry #${index + 1} is missing a <PartNumber>`);
@@ -662,18 +662,18 @@ function parseReachXml(
       });
     });
 
-    return {
-      supplierId: resolvedSupplierId,
-      partNumber,
-      type: certType,
-      declarationDate,
-      validUntil,
+      return {
+        supplierId: resolvedSupplierId,
+        partNumber,
+        type: certType,
+        declarationDate,
+        validUntil,
       thresholdPpm: null,
       sourceDocumentId,
       findings
     };
     })
-    .filter((cert): cert is CertificatePayload => Boolean(cert));
+    .filter((cert): cert is CertificatePayload => cert !== null);
 
   if (missingSupplierParts.length > 0) {
     throw buildMissingSupplierError(missingSupplierParts);
@@ -691,7 +691,7 @@ async function parseCertificatePdf(
   const missingSupplierParts: string[] = [];
   const certificates: CertificatePayload[] = parsed.parts
     .filter((part) => Boolean(part.partNumber?.trim()))
-    .map((part) => {
+    .map((part): CertificatePayload | null => {
       const resolvedSupplierId = resolveSupplierIdForPart(part.partNumber, supplierResolution);
       if (!resolvedSupplierId) {
         if (!missingSupplierParts.includes(part.partNumber)) {
@@ -715,7 +715,7 @@ async function parseCertificatePdf(
         }))
       };
     })
-    .filter((cert): cert is CertificatePayload => Boolean(cert));
+    .filter((cert): cert is CertificatePayload => cert !== null);
 
   if (missingSupplierParts.length > 0) {
     throw buildMissingSupplierError(missingSupplierParts);
