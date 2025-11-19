@@ -12,6 +12,8 @@
     "db:seed": "pnpm --filter @certivo/lib-db seed",
     "db:seed-user": "tsx ./libs/db/scripts/seed-user.mjs",
     "db:seed-suppliers": "node ./libs/db/scripts/seed-suppliers.mjs",
+    "db:seed-regulations": "node ./libs/db/scripts/seed-regulations.mjs",
+    "db:seed-basic": "pnpm db:seed-user && pnpm db:seed-suppliers && pnpm db:seed-regulations",
     "db:wipe": "docker exec certivo-postgres psql -U certivo -d certivo -c \"DROP SCHEMA IF EXISTS regulation_embeddings CASCADE; DROP SCHEMA IF EXISTS app_private CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO certivo; GRANT ALL ON SCHEMA public TO public;\" && pnpm db:migrate",
     "lab:test": "node scripts/lab-smoke.mjs",
     "risk:test": "node scripts/risk-impact-smoke.mjs"
