@@ -114,8 +114,20 @@ However, the `pnpm dev` helper will now automatically invoke this compose file w
 ```bash
 # From repo root
 pnpm db:migrate
+
+# Option 1: Seed full sample data (BOM, certificates, suppliers, regulations)
 pnpm db:seed
+
+# Option 2: Seed only basic data (user, suppliers, regulations)
+pnpm db:seed-basic
 ```
+
+**Available seed scripts:**
+- `pnpm db:seed` — Full sample data (tenant, user, BOM, certificates, suppliers, regulations, RAG documents)
+- `pnpm db:seed-basic` — Basic data only (tenant, user, suppliers, regulations)
+- `pnpm db:seed-user` — Tenant and admin user only
+- `pnpm db:seed-suppliers` — Suppliers from `Sample Data/suppliers.json`
+- `pnpm db:seed-regulations` — Regulations (ROHS, REACH, PFAS) with substance limits
 
 ### 3. Generate a JWT Token for Development
 
@@ -229,8 +241,12 @@ pnpm --filter @certivo/web dev    # Web app only
 ### Database Migrations
 
 ```bash
-pnpm db:migrate    # Run pending migrations
-pnpm db:seed       # Seed sample data
+pnpm db:migrate         # Run pending migrations
+pnpm db:seed            # Seed full sample data
+pnpm db:seed-basic      # Seed user, suppliers, regulations only
+pnpm db:seed-user       # Seed tenant and user only
+pnpm db:seed-suppliers  # Seed suppliers only
+pnpm db:seed-regulations # Seed regulations only
 ```
 
 Migrations live in `infra/db/migrations/`. The schema is defined in `libs/db/src/schema.ts`.
